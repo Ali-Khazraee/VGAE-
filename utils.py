@@ -17,6 +17,9 @@ import dgl
 from scipy.stats import multivariate_normal
 import torch.nn.functional as F
 from sklearn.metrics import f1_score
+from sklearn.ensemble import ExtraTreesClassifier
+import pandas as pd
+
 
 
 
@@ -224,6 +227,16 @@ def test(test_edges, org_adj, run_network, features, labels, inductive_model, ta
     auc_l, acc_l, ap_l, precision_l, recall_l, F1_score = roc_auc_estimator_labels(pred_single_label, true_single_label,
                                                                                    labels)
     return auc, val_acc, val_ap, precision, recall, HR, auc_l, acc_l, ap_l, precision_l, recall_l, F1_score
+
+
+def reduce_node_features(x, y, random_seed, n_components=5):
+    np.random.seed(random_seed)
+    model = ExtraTreesClassifier()
+    model.fit(x, y)
+    feat_importances = pd.Series(model.feature_importances_)
+    important_feats = np.array(feat_importances.nlargest(n_components).index)
+    x_reduced = x[:, important_feats]
+    return x_reduced, important_feats
 
 
 

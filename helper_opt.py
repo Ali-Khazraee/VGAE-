@@ -186,11 +186,11 @@ def train_model(dataCenter, features, args, device):
                                       (2 * (feat_val.shape[0] * feat_val.shape[1] - torch.sum(feat_val))))
 
 
+    TM = Motif_Count(args)
     if args.motif_obj == True:
-        TM = Motif_Count(args)
         TM.setup_function()
         reconstructed_x_slice, reconstructed_labels_m = TM.process_reconstructed_data(None, 
-        [adj_train], feat_train[:,np.array([ 495,  774,  581,   19, 1263])], np.array([ 495,  774,  581,   19, 1263]), torch.tensor(labels_train)
+        [adj_train], feat_train[:,np.array(DataCenter.important_feats_id)], np.array(DataCenter.important_feats_id), torch.tensor(labels_train)
     )
         ground_truth = TM.iteration_function(reconstructed_x_slice , reconstructed_labels_m, mode = "ground-truth")
 

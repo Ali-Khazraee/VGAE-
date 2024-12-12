@@ -30,6 +30,8 @@ from torch.hub import download_url_to_file
 
 import copy
 
+from utils import reduce_node_features
+
 
 def parse_index_file(filename):
     index = []
@@ -43,6 +45,8 @@ class DataCenter():
 
     def __init__(self):
         super().__init__()
+
+        self.important_feats_id = []
 
     def load_dataSet(self, dataSet):
         if "_dgl" in dataSet:
@@ -58,19 +62,26 @@ class DataCenter():
 
             num_class = ds.num_classes
 
-            # binary_features = (g.ndata['feat'] > 0).float()
-
-            # # Update the graph with the binary features
+            binary_features = (g.ndata['feat'] > 0).float()
             
-
-            # g.ndata['feat'] = binary_features
+            g.ndata['feat'] = binary_features
 
             features = g.ndata['feat']
+
+
+
             labels = g.ndata['label']
             labels = labels.numpy()
 
             adj_matrix = g.adjacency_matrix(scipy_fmt='coo')
             adj = adj_matrix.toarray()
+
+            random_seed = 0
+            reduced_features, important_feats = reduce_node_features(features.numpy(), labels, random_seed)
+
+            self.important_feats_id = important_feats
+
+
 
             test_indexs, val_indexs, train_indexs = self._split_data(labels, adj)
 
@@ -87,6 +98,8 @@ class DataCenter():
             setattr(self, dataSet + '_feats', features)
             setattr(self, dataSet + '_labels', labels)
             setattr(self, dataSet + '_adj_lists', adj)
+            
+
 
 
         if dataSet == 'photos' or dataSet == 'computers':
