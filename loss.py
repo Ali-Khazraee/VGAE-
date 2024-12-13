@@ -66,13 +66,20 @@ def  optimizer_VAE (lambda_1,lambda_2, lambda_3,lambda_4, true_labels, reconstru
     if loss_type == "0":
         posterior_cost = posterior_cost_classes
     elif loss_type == "1":
-        posterior_cost = lambda_1 * posterior_cost_edges + lambda_2 * posterior_cost_features + lambda_3 * posterior_cost_classes + lambda_4 * motif_loss
+        posterior_cost = (lambda_1) * posterior_cost_edges + (lambda_2) * posterior_cost_features + (lambda_3) * posterior_cost_classes
     elif loss_type == "2":
-        posterior_cost = posterior_cost_edges + posterior_cost_features + posterior_cost_classes
+        posterior_cost = (lambda_1)* posterior_cost_edges + (lambda_2)* posterior_cost_features + (lambda_3) * posterior_cost_classes + (lambda_4) * motif_loss
     elif loss_type == "3":
-        posterior_cost = posterior_cost_edges
+        posterior_cost = posterior_cost_edges + posterior_cost_features + posterior_cost_classes
     elif loss_type == "4":
-        posterior_cost = posterior_cost_edges+posterior_cost_classes
+        posterior_cost = posterior_cost_edges + posterior_cost_features + posterior_cost_classes + motif_loss
+    elif loss_type == "5":
+        posterior_cost = posterior_cost_edges
+    elif loss_type == "6":
+        posterior_cost = posterior_cost_edges + motif_loss 
+    elif loss_type == "7":
+        posterior_cost = posterior_cost_edges + posterior_cost_classes
+
 
 
     
