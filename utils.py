@@ -19,6 +19,8 @@ import torch.nn.functional as F
 from sklearn.metrics import f1_score
 from sklearn.ensemble import ExtraTreesClassifier
 import pandas as pd
+import pickle
+# import stat_rnn
 
 
 
@@ -240,8 +242,61 @@ def reduce_node_features(x, y, random_seed, n_components=5):
 
 
 
+# def descrizer(graph, threshold=.5):
+#     """
+
+#     :param graph: numpy array
+#     :return: discretize numpy array using the threshold
+#     """
+#     graph[graph >= 0.5] = 1
+#     graph[graph < 0.5] = 0
+#     return graph
+
+
+# def Hemogenizer(adj_matrix):
+#     """
+
+#     :param adj_matrix: given the numpy tesnsor, homegenize it into matix
+#     :return:
+#     """
+#     return adj_matrix.sum(0)
+
+
+# def generator(model, computation_graph, in_features,  num_sam = 10):
+
+#     """use the sample and generate  attiributed graph"""
 
 
 
+#     generate_graph = []
+#     for sample_i in range(num_sam):
+#         std_z, m_z, z, reconstructed_adj_logit, reconstructed_x, reconstructed_labels = model(computation_graph, in_features)
+#         reconstructed_adjacency = torch.sigmoid(reconstructed_adj_logit)
+#         reconstructed_x_prob = torch.sigmoid(reconstructed_x)
+#         reconstructed_labels_prob = torch.sigmoid(reconstructed_labels)
+#         graph =reconstructed_adjacency.detach().numpy()
+#         graph = descrizer(graph)
+#         graph = Hemogenizer(graph)
+#         generate_graph.append([graph, reconstructed_x_prob.detach().numpy()])
+#     return generate_graph
 
+# def SaveSamples(model, computation_graph, in_features, ref_graph,ref_feature, dir,  num_sam = 10):
+#     generate_graph = generator(model, computation_graph, in_features,  num_sam = 10)
+#     refrence_graph = []
+
+#     refrence_graph.append([Hemogenizer(ref_graph.detach().numpy()), ref_feature.detach().numpy()])
+
+
+#     if not os.path.exists(dir):
+#         os.makedirs(dir)
+
+#     # np.save(dir + setting+'_generatedGraphs_.npy', generate_graph, allow_pickle=True)
+#     # np.save(dir + setting+'refGraphs.npy', refrence_graph, allow_pickle=True)
+#     with open(dir + 'generatedGraphs.npy', 'wb') as file:
+#         pickle.dump(generate_graph, file)
+
+#     with open(dir + 'refGraphs.npy', 'wb') as file:
+#         pickle.dump(refrence_graph, file)
+
+#     stat_rnn.mmd_eval([stat_rnn.to_nx(G[0]) for G in generate_graph], [stat_rnn.to_nx(G[0]) for G in refrence_graph], True)
 

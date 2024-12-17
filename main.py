@@ -1,18 +1,4 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Thu Apr 13 14:58:09 2023
 
-@author: pnaddaf
-"""
-
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Tue Feb 22 11:51:23 2022
-
-@author: pnaddaf
-"""
 import sys
 import os
 import argparse
@@ -33,6 +19,11 @@ import time
 import helper_opt as helper
 import statistics
 import warnings
+import os
+import subprocess
+from motif_count import *
+
+
 
 warnings.simplefilter('ignore')
 
@@ -76,11 +67,17 @@ parser.add_argument('--transductive', dest="transductive", default="True", type=
                     help="This flag is used if want to have transductive link prediction")
 parser.add_argument('--edge_base', dest="edge_base", default="True", type=str,
                     help="This flag is used if want to have edge base data splitting")
-parser.add_argument('-motif_obj', dest="motif_obj", default= False , help="adds motif_loss term to objective function")
+parser.add_argument('-motif_obj', dest="motif_obj", default= True , help="adds motif_loss term to objective function")
 parser.add_argument('-rp', dest="rule_prune",  default= True , help="Toggle rule pruning on or off")
 parser.add_argument('-rw', dest="rule_weight",  default= False , help="Toggle rule weighting on or off - If you want to use rule weighting, you need to turn on rule pruning first by setting it to True.")
 parser.add_argument('-dr', dest="devide_rec_adj",  default= False , help="This switch will divide reconstructed adjacency matrix by 1/n in every epoch")
 parser.add_argument('-graph_type', dest="graph_type", default="homogeneous", choices=["homogeneous", "heterogeneous"], help="Choose the graph type: homogeneous or heterogeneous")
+parser.add_argument('--graph_realism', type=bool, default=False,
+                    help="Set to True to enable graph realism evaluation, or False to disable it.")
+
+parser.add_argument('--motif_count_eval', type=bool, default=True,
+                    help="Set to True to enable motif_count evaluation, or False to disable it.")
+
 
 
 args = parser.parse_args()
@@ -89,10 +86,7 @@ fully_inductive = args.fully_inductive
 print("")
 print("SETING: " + str(args))
 
-# if torch.cuda.is_available():
-#     device_id = torch.cuda.current_device()
-#     print('Using device', device_id, torch.cuda.get_device_name(device_id))
-# else:
+
 device_id = 'cpu'
 
 device = torch.device(device_id)
@@ -106,30 +100,32 @@ torch.cuda.manual_seed_all(args.seed)
 
 # %% load data
 ds = args.dataSet
-dataCenter = DataCenter()
-dataCenter.load_dataSet(ds)
-org_adj = getattr(dataCenter, ds + '_adj_lists')
-features = torch.FloatTensor(getattr(dataCenter, ds + '_feats'))
-labels = torch.FloatTensor(getattr(dataCenter, ds + '_labels')).to(device)
-val_indx = getattr(dataCenter, ds + '_val_edge_idx')
-train_indx = getattr(dataCenter, ds + '_train_edge_idx')
-ignore_edges = getattr(dataCenter, ds + '_ignore_edges_inx')
-adj_test = getattr(dataCenter, ds + '_adj_test')
+DataCenter = DataCenter()
+DataCenter.load_dataSet(ds)
+org_adj = getattr(DataCenter, ds + '_adj_lists')
+features = torch.FloatTensor(getattr(DataCenter, ds + '_feats'))
+labels = torch.FloatTensor(getattr(DataCenter, ds + '_labels')).to(device)
+val_indx = getattr(DataCenter, ds + '_val_edge_idx')
+train_indx = getattr(DataCenter, ds + '_train_edge_idx')
+ignore_edges = getattr(DataCenter, ds + '_ignore_edges_inx')
+adj_test = getattr(DataCenter, ds + '_adj_test')
+
+
+
 
 
 
 
 
 #  train inductive_model
-inductive_model, z_p = helper.train_model(dataCenter, features.to(device),
+inductive_model, z_p = helper.train_model(DataCenter, features.to(device),
                                          args, device)
-# inductive_model, z_p = helper.train_PNModel(dataCenter, features.to(device),
-#                                          args, device)
+
 
 
 # Split A into test and train
-trainId = getattr(dataCenter, ds + '_train')
-testId = getattr(dataCenter, ds + '_test')
+trainId = getattr(DataCenter, ds + '_train')
+testId = getattr(DataCenter, ds + '_test')
 
 
 # testId = trainId
@@ -485,3 +481,72 @@ with open('./results.csv', 'a', newline="\n") as f:
     writer.writerow(["labels_" + save_recons_adj_name, statistics.mean(auc_list_label), statistics.mean(acc_list_label),
                      statistics.mean(ap_list_label), statistics.mean(precision_list_label),
                      statistics.mean(recall_list_label), statistics.mean(F1_list_label)])
+
+
+
+
+
+
+
+
+# evaluation on graph realism and motif count
+
+# if args.tuning == "False" and args.graph_realism == True:
+#     inductive_model.eval()
+#     dir = "GeneratedSamples/"+str(args.dataSet)
+#     setting="Rule_reg" if args.use_motif else "Vanila"
+#     dir+=setting+"/"
+#     SaveSamples(inductive_model, graph_dgl, features,adj_train, features[:,important_feat_ids].float(), dir,setting)
+#     gmm_metrics_dir = "GMM-metrics"  # Relative or absolute path
+#     script_name = "RuleEval.py"
+#     subprocess.run(["python", os.path.join(gmm_metrics_dir, script_name)], check=True)
+
+
+
+if args.tuning == "False" and args.motif_count_eval == True:
+
+
+    CMM = Motif_Count(args)
+    CMM.setup_function()
+    reconstructed_x_slice, reconstructed_labels_m = CMM.process_reconstructed_data(None, 
+    [torch.tensor(org_adj, dtype=torch.float64)], torch.tensor(features[:,np.array(DataCenter.important_feats_id)]), np.array(DataCenter.important_feats_id), torch.tensor(labels)
+)
+    metric_ground_truth = CMM.iteration_function(reconstructed_x_slice , reconstructed_labels_m, mode = "ground-truth")
+
+
+    org_adj_sparse = sp.coo_matrix(org_adj)
+    metric_graph_dgl = dgl.from_scipy(org_adj_sparse)
+
+
+    with torch.no_grad():  
+
+        std_z, m_z, z, reconstructed_adj, reconstructed_feat, re_labels = inductive_model(metric_graph_dgl, features, labels,
+                                                                                targets, sampling_method,
+                                                                                args.is_prior, train=False)
+
+        epsilon = torch.randn_like(std_z) 
+        sampled_z = m_z + epsilon * std_z  
+
+        sampled_adj = inductive_model.generator(sampled_z)
+
+        sampled_features = inductive_model.generator_feat(sampled_z)
+
+        sampled_labels = inductive_model.classifier(sampled_z)
+
+
+
+    reconstructed_adjacency = torch.sigmoid(sampled_adj)
+    reconstructed_x_prob = torch.sigmoid(sampled_features)
+    reconstructed_labels_prob = torch.sigmoid(sampled_labels)
+
+
+    reconstructed_x_slice, reconstructed_labels_m = CMM.process_reconstructed_data(None, 
+    [reconstructed_adjacency], reconstructed_x_prob[:,np.array(DataCenter.important_feats_id)], np.array(DataCenter.important_feats_id), torch.tensor(reconstructed_labels_prob))
+    metric_predicted = CMM.iteration_function(reconstructed_x_slice , reconstructed_labels_m, mode = "metric-predicted")
+
+
+    closeness = torch.sqrt(F.mse_loss(torch.stack(metric_ground_truth), torch.stack(metric_predicted)))
+
+
+
+    print('closensee = ', closeness)

@@ -30,8 +30,9 @@ import timeit
 import csv
 from bayes_opt import BayesianOptimization
 from loss import *
-
 from motif_count import *
+
+
 
 # %% KDD model
 def train_model(dataCenter, features, args, device):
@@ -186,26 +187,28 @@ def train_model(dataCenter, features, args, device):
                                       (2 * (feat_val.shape[0] * feat_val.shape[1] - torch.sum(feat_val))))
 
 
-    TM = Motif_Count(args)
+    
     if args.motif_obj == True:
-        TM.setup_function()
-        reconstructed_x_slice, reconstructed_labels_m = TM.process_reconstructed_data(None, 
-        [adj_train], feat_train[:,np.array(DataCenter.important_feats_id)], np.array(DataCenter.important_feats_id), torch.tensor(labels_train)
+        CM = Motif_Count(args)
+        CM.setup_function()
+        reconstructed_x_slice, reconstructed_labels_m = CM.process_reconstructed_data(None, 
+        [adj_train], feat_train[:,np.array(dataCenter.important_feats_id)], np.array(dataCenter.important_feats_id), torch.tensor(labels_train)
     )
-        ground_truth = TM.iteration_function(reconstructed_x_slice , reconstructed_labels_m, mode = "ground-truth")
+        ground_truth = CM.iteration_function(reconstructed_x_slice , reconstructed_labels_m, mode = "ground-truth")
 
 
     else:
+        CM = None
         ground_truth = None
 
 
     # if args.motif_obj == True:
-    #     TM = Motif_Count(args)
-    #     TM.setup_function()
-    #     reconstructed_x_slice, reconstructed_labels_m = TM.process_reconstructed_data(None, 
+    #     CM = Motif_Count(args)
+    #     CM.setup_function()
+    #     reconstructed_x_slice, reconstructed_labels_m = CM.process_reconstructed_data(None, 
     #     [original_adj], features[:,np.array([ 495,  774,  581,   19, 1263])], np.array([ 495,  774,  581,   19, 1263]), torch.tensor(labels_np)
     # )
-    #     ground_truth = TM.iteration_function(reconstructed_x_slice , reconstructed_labels_m, mode = "ground-truth")
+    #     ground_truth = CM.iteration_function(reconstructed_x_slice , reconstructed_labels_m, mode = "ground-truth")
 
 
     # else:
@@ -230,16 +233,16 @@ def train_model(dataCenter, features, args, device):
         optimizer_function = make_optimizer_wrapper(labels_train, labels_val, dataset, epoch_number, model, graph_dgl, graph_dgl_val, feat_train,
                     feat_val, targets, sampling_method, is_prior, loss_type, adj_train, adj_val, norm_feat,
                     pos_weight_feat, norm_feat_val, pos_weight_feat_val, num_nodes, num_nodes_val, pos_wight, norm,
-                    pos_wight_val, norm_val, optimizer, val_indx, trainId, args, ground_truth, TM)
+                    pos_wight_val, norm_val, optimizer, val_indx, trainId, args, ground_truth, CM)
         optimizer_hp = BayesianOptimization(
             f=optimizer_function,
             pbounds=pbounds,
             random_state=42
         )
         optimizer_hp.maximize(
-            init_points=10,
-            n_iter=20
-        )
+            init_points=20,
+            n_iter=200
+       )
         print(optimizer_hp.max)
 
         #Extract and print the best values for weight1 and weight2
@@ -270,26 +273,17 @@ def train_model(dataCenter, features, args, device):
                     lambda_1 = float(row[1])
                     lambda_2 = float(row[2])
                     lambda_3 = float(row[3])
+                    try:
+                        lambda_4 = float(row[4])
+                    except IndexError:
+                        lambda_4 = None
 
-    print("weights:", lambda_1, lambda_2, lambda_3)
-
-
-
-
-
-
-
-    # if args.motif_obj == True:
-    #     TM = Motif_Count(args)
-    #     TM.setup_function()
-    #     reconstructed_x_slice, reconstructed_labels_m = TM.process_reconstructed_data(None, 
-    #     [original_adj], features[:,np.array([495,  774,  581,   19, 1263])], np.array([ 495,  774,  581,   19, 1263]), torch.tensor(labels_np)
-    # )
-    #     ground_truth = TM.iteration_function(reconstructed_x_slice , reconstructed_labels_m, mode = "mtric_ground_truth")
+    print("weights:", lambda_1, lambda_2, lambda_3, lambda_4)
 
 
-    # else:
-    #     ground_truth = None
+
+
+
 
     for epoch in range(epoch_number):
         model.train()
@@ -312,10 +306,10 @@ def train_model(dataCenter, features, args, device):
 
         if args.motif_obj == True:
 
-            reconstructed_x_slice, reconstructed_labels_m = TM.process_reconstructed_data(None, 
-            [reconstructed_adjacency], reconstructed_x_prob[:,np.array([495,  774,  581,   19, 1263])], np.array([ 495,  774,  581,   19, 1263]), torch.tensor(reconstructed_labels_prob)
+            reconstructed_x_slice, reconstructed_labels_m = CM.process_reconstructed_data(None, 
+            [reconstructed_adjacency], reconstructed_x_prob[:,np.array(dataCenter.important_feats_id)], np.array(dataCenter.important_feats_id), torch.tensor(reconstructed_labels_prob)
         )
-            predicted = TM.iteration_function(reconstructed_x_slice , reconstructed_labels_m, mode = "ground-truth")
+            predicted = CM.iteration_function(reconstructed_x_slice , reconstructed_labels_m, mode = "ground-truth")
 
 
         else:
@@ -352,13 +346,13 @@ def train_model(dataCenter, features, args, device):
 
 
 
-    return model, z
+    return model, z 
 
 
 def optimize_weights(lambda_1, lambda_2, lambda_3,lambda_4, labels_train, labels_val, dataset, epoch_number, model, graph_dgl, graph_dgl_val, feat_train,
                 feat_val, targets, sampling_method, is_prior, loss_type, adj_train_org, adj_val_org, norm_feat,
                 pos_weight_feat, norm_feat_val, pos_weight_feat_val, num_nodes, num_nodes_val, pos_wight, norm,
-                pos_wight_val, norm_val, optimizer, val_indx, trainId, args, ground_truth, TM):
+                pos_wight_val, norm_val, optimizer, val_indx, trainId, args, ground_truth, CM):
     for epoch in range(epoch_number):
         model.train()
         # forward propagation by using all nodes
@@ -377,10 +371,10 @@ def optimize_weights(lambda_1, lambda_2, lambda_3,lambda_4, labels_train, labels
 
         if args.motif_obj == True:
 
-            reconstructed_x_slice, reconstructed_labels_m = TM.process_reconstructed_data(None, 
-            [reconstructed_adjacency], reconstructed_x_prob[:,np.array([495,  774,  581,   19, 1263])], np.array([ 495,  774,  581,   19, 1263]), torch.tensor(reconstructed_labels_prob)
+            reconstructed_x_slice, reconstructed_labels_m = CM.process_reconstructed_data(None, 
+            [reconstructed_adjacency], reconstructed_x_prob[:,np.array(DataCenter.important_feats_id)], np.array(DataCenter.important_feats_id), torch.tensor(reconstructed_labels_prob)
         )
-            predicted = TM.iteration_function(reconstructed_x_slice , reconstructed_labels_m, mode = "ground-truth")
+            predicted = CM.iteration_function(reconstructed_x_slice , reconstructed_labels_m, mode = "ground-truth")
 
 
         else:
@@ -439,10 +433,10 @@ def optimize_weights(lambda_1, lambda_2, lambda_3,lambda_4, labels_train, labels
 def make_optimizer_wrapper(labels_train, labels_val, dataset, epoch_number, model, graph_dgl, graph_dgl_val, feat_train,
                 feat_val, targets, sampling_method, is_prior, loss_type, adj_train_org, adj_val_org, norm_feat,
                 pos_weight_feat, norm_feat_val, pos_weight_feat_val, num_nodes, num_nodes_val, pos_wight, norm,
-                pos_wight_val, norm_val, optimizer, val_indx, trainId, args, ground_truth, TM):
+                pos_wight_val, norm_val, optimizer, val_indx, trainId, args, ground_truth, CM):
     def optimize_weights_wrapper(lambda_1, lambda_2, lambda_3, lambda_4):
         return optimize_weights(lambda_1, lambda_2, lambda_3, lambda_4, labels_train, labels_val, dataset, epoch_number, model, graph_dgl, graph_dgl_val, feat_train,
                 feat_val, targets, sampling_method, is_prior, loss_type, adj_train_org, adj_val_org, norm_feat,
                 pos_weight_feat, norm_feat_val, pos_weight_feat_val, num_nodes, num_nodes_val, pos_wight, norm,
-                pos_wight_val, norm_val, optimizer, val_indx, trainId, args, ground_truth, TM)
+                pos_wight_val, norm_val, optimizer, val_indx, trainId, args, ground_truth, CM)
     return optimize_weights_wrapper
