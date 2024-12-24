@@ -36,7 +36,7 @@ parser = argparse.ArgumentParser(description='Inductive')
 
 parser.add_argument('--e', type=int, dest="epoch_number", default=100, help="Number of Epochs")
 parser.add_argument('--dataSet', type=str, default="Cora_dgl")
-parser.add_argument('--loss_type', dest="loss_type", default="1", help="type of combination between loss_A and loss_F")
+parser.add_argument('--loss_type', dest="loss_type", default="2", help="type of combination between loss_A and loss_F")
 parser.add_argument('--sampling_method', dest="sampling_method", default="deterministic", help="This var shows sampling method it could be: monte, importance_sampling, deterministic")
 parser.add_argument('--method', dest="method", default="single", help="This var shows method it could be: multi, single")
 parser.add_argument('--iterative', dest="iterative", default="False", type=str, help="This flag is used if want to have iterative link prediction")
@@ -100,15 +100,15 @@ torch.cuda.manual_seed_all(args.seed)
 
 # %% load data
 ds = args.dataSet
-DataCenter = DataCenter()
-DataCenter.load_dataSet(ds)
-org_adj = getattr(DataCenter, ds + '_adj_lists')
-features = torch.FloatTensor(getattr(DataCenter, ds + '_feats'))
-labels = torch.FloatTensor(getattr(DataCenter, ds + '_labels')).to(device)
-val_indx = getattr(DataCenter, ds + '_val_edge_idx')
-train_indx = getattr(DataCenter, ds + '_train_edge_idx')
-ignore_edges = getattr(DataCenter, ds + '_ignore_edges_inx')
-adj_test = getattr(DataCenter, ds + '_adj_test')
+data_center = DataCenter()
+data_center.load_dataSet(ds)
+org_adj = getattr(data_center, ds + '_adj_lists')
+features = torch.FloatTensor(getattr(data_center, ds + '_feats'))
+labels = torch.FloatTensor(getattr(data_center, ds + '_labels')).to(device)
+val_indx = getattr(data_center, ds + '_val_edge_idx')
+train_indx = getattr(data_center, ds + '_train_edge_idx')
+ignore_edges = getattr(data_center, ds + '_ignore_edges_inx')
+adj_test = getattr(data_center, ds + '_adj_test')
 
 
 
@@ -118,14 +118,14 @@ adj_test = getattr(DataCenter, ds + '_adj_test')
 
 
 #  train inductive_model
-inductive_model, z_p = helper.train_model(DataCenter, features.to(device),
+inductive_model, z_p = helper.train_model(data_center, features.to(device),
                                          args, device)
 
 
 
 # Split A into test and train
-trainId = getattr(DataCenter, ds + '_train')
-testId = getattr(DataCenter, ds + '_test')
+trainId = getattr(data_center, ds + '_train')
+testId = getattr(data_center, ds + '_test')
 
 
 # testId = trainId
@@ -509,7 +509,7 @@ if args.tuning == "False" and args.motif_count_eval == True:
     CMM = Motif_Count(args)
     CMM.setup_function()
     reconstructed_x_slice, reconstructed_labels_m = CMM.process_reconstructed_data(None, 
-    [torch.tensor(org_adj, dtype=torch.float64)], torch.tensor(features[:,np.array(DataCenter.important_feats_id)]), np.array(DataCenter.important_feats_id), torch.tensor(labels)
+    [torch.tensor(org_adj, dtype=torch.float64)], torch.tensor(features[:,np.array(data_center.important_feats_id)]), np.array(data_center.important_feats_id), torch.tensor(labels)
 )
     metric_ground_truth = CMM.iteration_function(reconstructed_x_slice , reconstructed_labels_m, mode = "ground-truth")
 
@@ -541,7 +541,7 @@ if args.tuning == "False" and args.motif_count_eval == True:
 
 
     reconstructed_x_slice, reconstructed_labels_m = CMM.process_reconstructed_data(None, 
-    [reconstructed_adjacency], reconstructed_x_prob[:,np.array(DataCenter.important_feats_id)], np.array(DataCenter.important_feats_id), torch.tensor(reconstructed_labels_prob))
+    [reconstructed_adjacency], reconstructed_x_prob[:,np.array(data_center.important_feats_id)], np.array(data_center.important_feats_id), torch.tensor(reconstructed_labels_prob))
     metric_predicted = CMM.iteration_function(reconstructed_x_slice , reconstructed_labels_m, mode = "metric-predicted")
 
 

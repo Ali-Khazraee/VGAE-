@@ -35,7 +35,7 @@ from motif_count import *
 
 
 # %% KDD model
-def train_model(dataCenter, features, args, device):
+def train_model(data_center, features, args, device):
     dataset = args.dataSet
     decoder = args.decoder_type
     encoder = args.encoder_type
@@ -54,11 +54,11 @@ def train_model(dataCenter, features, args, device):
     loss_type = args.loss_type
 
 
-    original_adj_full= torch.FloatTensor(getattr(dataCenter, ds+'_adj_lists')).to(device)
-    node_label_full= torch.FloatTensor(getattr(dataCenter, ds+'_labels')).to(device)
+    original_adj_full= torch.FloatTensor(getattr(data_center, ds+'_adj_lists')).to(device)
+    node_label_full= torch.FloatTensor(getattr(data_center, ds+'_labels')).to(device)
 
-    val_indx = getattr(dataCenter, ds + '_val_edge_idx')
-    train_indx = getattr(dataCenter, ds + '_train_edge_idx')
+    val_indx = getattr(data_center, ds + '_val_edge_idx')
+    train_indx = getattr(data_center, ds + '_train_edge_idx')
 
     # shuffling the data, and selecting a subset of it
     if subgraph_size == -1:
@@ -106,12 +106,12 @@ def train_model(dataCenter, features, args, device):
     class_decoder = MulticlassClassifier(number_of_classes, num_of_comunities)
 
 
-    trainId = getattr(dataCenter, ds + '_train')
-    testId = getattr(dataCenter, ds + '_test')
-    validId = getattr(dataCenter, ds + '_val')
+    trainId = getattr(data_center, ds + '_train')
+    testId = getattr(data_center, ds + '_test')
+    validId = getattr(data_center, ds + '_val')
     #
-    # adj_train = getattr(dataCenter, ds + '_adj_train')
-    # adj_val = getattr(dataCenter, ds + '_adj_val')
+    # adj_train = getattr(data_center, ds + '_adj_train')
+    # adj_val = getattr(data_center, ds + '_adj_val')
     #
     # feat_np = features.cpu().data.numpy()
     # feat_train = feat_np
@@ -192,7 +192,7 @@ def train_model(dataCenter, features, args, device):
         CM = Motif_Count(args)
         CM.setup_function()
         reconstructed_x_slice, reconstructed_labels_m = CM.process_reconstructed_data(None, 
-        [adj_train], feat_train[:,np.array(dataCenter.important_feats_id)], np.array(dataCenter.important_feats_id), torch.tensor(labels_train)
+        [adj_train], feat_train[:,np.array(data_center.important_feats_id)], np.array(data_center.important_feats_id), torch.tensor(labels_train)
     )
         ground_truth = CM.iteration_function(reconstructed_x_slice , reconstructed_labels_m, mode = "ground-truth")
 
@@ -259,26 +259,29 @@ def train_model(dataCenter, features, args, device):
 
     # to read weights
     if args.tuning == "False":
-        with open('weights.csv', mode='r') as file:
-            # Create a CSV reader object
+        weights_list = []
+        with open('new_weights.csv', 'r') as file:
             csv_reader = csv.reader(file)
-
-            # Read the header (first row) if present
-            header = next(csv_reader)
-            # print(f"Header: {header}")
-
-            # Iterate over the rows in the CSV file
             for row in csv_reader:
-                if row[0] in args.dataSet:
-                    lambda_1 = float(row[1])
-                    lambda_2 = float(row[2])
-                    lambda_3 = float(row[3])
+                processed_row = []
+                for item in row:
                     try:
-                        lambda_4 = float(row[4])
-                    except IndexError:
-                        lambda_4 = None
+                        processed_row.append(float(item))
+                    except ValueError:
+                        processed_row.append(item)
+                weights_list.append(processed_row)
 
-    print("weights:", lambda_1, lambda_2, lambda_3, lambda_4)
+        for row in weights_list:
+            if row[0] in args.dataSet:
+                lambda_1 = float(row[1])
+                lambda_2 = float(row[2])
+                lambda_3 = float(row[3])
+                try:
+                    lambda_4 = float(row[4])
+                except IndexError:
+                    lambda_4 = None
+
+        print("weights:", lambda_1, lambda_1, lambda_3, lambda_4)
 
 
 
@@ -307,7 +310,7 @@ def train_model(dataCenter, features, args, device):
         if args.motif_obj == True:
 
             reconstructed_x_slice, reconstructed_labels_m = CM.process_reconstructed_data(None, 
-            [reconstructed_adjacency], reconstructed_x_prob[:,np.array(dataCenter.important_feats_id)], np.array(dataCenter.important_feats_id), torch.tensor(reconstructed_labels_prob)
+            [reconstructed_adjacency], reconstructed_x_prob[:,np.array(data_center.important_feats_id)], np.array(data_center.important_feats_id), torch.tensor(reconstructed_labels_prob)
         )
             predicted = CM.iteration_function(reconstructed_x_slice , reconstructed_labels_m, mode = "ground-truth")
 
@@ -372,7 +375,7 @@ def optimize_weights(lambda_1, lambda_2, lambda_3,lambda_4, labels_train, labels
         if args.motif_obj == True:
 
             reconstructed_x_slice, reconstructed_labels_m = CM.process_reconstructed_data(None, 
-            [reconstructed_adjacency], reconstructed_x_prob[:,np.array(DataCenter.important_feats_id)], np.array(DataCenter.important_feats_id), torch.tensor(reconstructed_labels_prob)
+            [reconstructed_adjacency], reconstructed_x_prob[:,np.array(data_center.important_feats_id)], np.array(data_center.important_feats_id), torch.tensor(reconstructed_labels_prob)
         )
             predicted = CM.iteration_function(reconstructed_x_slice , reconstructed_labels_m, mode = "ground-truth")
 
