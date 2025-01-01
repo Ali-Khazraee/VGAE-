@@ -35,12 +35,12 @@ warnings.simplefilter('ignore')
 parser = argparse.ArgumentParser(description='Inductive')
 
 parser.add_argument('--e', type=int, dest="epoch_number", default=100, help="Number of Epochs")
-parser.add_argument('--dataSet', type=str, default="Cora_dgl")
-parser.add_argument('--loss_type', dest="loss_type", default="2", help="type of combination between loss_A and loss_F")
+parser.add_argument('--dataSet', type=str, default="photos_dgl")
+parser.add_argument('--loss_type', dest="loss_type", default="1", help="type of combination between loss_A and loss_F")
 parser.add_argument('--sampling_method', dest="sampling_method", default="deterministic", help="This var shows sampling method it could be: monte, importance_sampling, deterministic")
 parser.add_argument('--method', dest="method", default="single", help="This var shows method it could be: multi, single")
 parser.add_argument('--iterative', dest="iterative", default="False", type=str, help="This flag is used if want to have iterative link prediction")
-parser.add_argument('--tuning', dest="tuning", default="False", type=str, help="This flag is used if want to tune hyperparameters in helper_opt")
+parser.add_argument('--tuning', dest="tuning", default="True", type=str, help="This flag is used if want to tune hyperparameters in helper_opt")
 
 
 parser.add_argument('--seed', type=int, default=123)
@@ -67,7 +67,7 @@ parser.add_argument('--transductive', dest="transductive", default="True", type=
                     help="This flag is used if want to have transductive link prediction")
 parser.add_argument('--edge_base', dest="edge_base", default="True", type=str,
                     help="This flag is used if want to have edge base data splitting")
-parser.add_argument('-motif_obj', dest="motif_obj", default= True , help="adds motif_loss term to objective function")
+parser.add_argument('-motif_obj', dest="motif_obj", default= False , help="adds motif_loss term to objective function")
 parser.add_argument('-rp', dest="rule_prune",  default= True , help="Toggle rule pruning on or off")
 parser.add_argument('-rw', dest="rule_weight",  default= False , help="Toggle rule weighting on or off - If you want to use rule weighting, you need to turn on rule pruning first by setting it to True.")
 parser.add_argument('-dr', dest="devide_rec_adj",  default= False , help="This switch will divide reconstructed adjacency matrix by 1/n in every epoch")
@@ -75,7 +75,7 @@ parser.add_argument('-graph_type', dest="graph_type", default="homogeneous", cho
 parser.add_argument('--graph_realism', type=bool, default=False,
                     help="Set to True to enable graph realism evaluation, or False to disable it.")
 
-parser.add_argument('--motif_count_eval', type=bool, default=True,
+parser.add_argument('--motif_count_eval', type=bool, default=False,
                     help="Set to True to enable motif_count evaluation, or False to disable it.")
 
 
