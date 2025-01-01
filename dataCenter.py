@@ -372,7 +372,6 @@ class DataCenter():
             encoder = OneHotEncoder(sparse_output=False)
             numerical_classes = labels.reshape(-1, 1)
             labels = encoder.fit_transform(numerical_classes)
-
             self._add_edges(test_indexs, val_indexs, train_indexs, adj, dataSet)
 
             setattr(self, dataSet + '_test', test_indexs)

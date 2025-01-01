@@ -35,7 +35,7 @@ warnings.simplefilter('ignore')
 parser = argparse.ArgumentParser(description='Inductive')
 
 parser.add_argument('--e', type=int, dest="epoch_number", default=100, help="Number of Epochs")
-parser.add_argument('--dataSet', type=str, default="photos_dgl")
+parser.add_argument('--dataSet', type=str, default="ACM")
 parser.add_argument('--loss_type', dest="loss_type", default="1", help="type of combination between loss_A and loss_F")
 parser.add_argument('--sampling_method', dest="sampling_method", default="deterministic", help="This var shows sampling method it could be: monte, importance_sampling, deterministic")
 parser.add_argument('--method', dest="method", default="single", help="This var shows method it could be: multi, single")
