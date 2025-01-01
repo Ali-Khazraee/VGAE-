@@ -315,6 +315,8 @@ class DataCenter():
             # index = -1
             # test_indexs, val_indexs, train_indexs = self._split_data(feature[:index].shape[0])
 
+            self._add_edges(test_indexs, val_indexs, train_indexs, adj, dataSet)
+
             setattr(self, dataSet + '_test', test_indexs)
             setattr(self, dataSet + '_val', val_indexs)
             setattr(self, dataSet + '_train', train_indexs)
