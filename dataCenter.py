@@ -324,6 +324,74 @@ class DataCenter():
             setattr(self, dataSet + '_adj_lists', adj[:index, :index].toarray())
             setattr(self, dataSet + '_edge_labels', edge_labels[:index].toarray())
 
+
+        if dataSet == "imdb-multi":
+            obj = []
+            adj_file_name = "IMDB/edges.pkl"
+            with open(adj_file_name, 'rb') as f:
+                obj.append(pkl.load(f))
+            # merging diffrent edge type into a single adj matrix
+            adj = lil_matrix(obj[0][0].shape)
+            for matrix in obj[0]:
+                adj += matrix
+            adj = adj.toarray()
+            matrix = obj[0]
+            edge_labels = matrix[0] + matrix[1]
+            edge_labels += (matrix[2] + matrix[3]) * 2
+            
+            # Create node labels
+            node_label = []
+            in_1 = matrix[0].indices.min()
+            in_2 = matrix[0].indices.max() + 1
+            in_3 = matrix[2].indices.max() + 1
+            node_label.extend([0 for i in range(in_1)])
+            node_label.extend([1 for i in range(in_1, in_2)])
+            node_label.extend([2 for i in range(in_2, in_3)])
+            
+            # Create mapping details
+            mapping_details = {
+                'node_type_to_index_map': {
+                    'movie': (0, in_1),
+                    'director': (in_1, in_2),
+                    'actor': (in_2, in_3)
+                },
+                'edge_type_encoding': {
+                    ('movie', 'director'): 1, 
+                    ('director', 'movie'): 1,
+                    ('movie', 'actor'): 2,    
+                    ('actor', 'movie'): 2
+                }
+            }
+            
+            obj = []
+            with open("IMDB/node_features.pkl", 'rb') as f:
+                obj.append(pkl.load(f))
+            feature = sp.csr_matrix(obj[0])
+            feature = sp.csr_matrix(obj[0])
+            
+
+
+
+
+
+            labels = np.asarray(node_label, dtype=np.int64)
+            test_indexs, val_indexs, train_indexs = self._split_data(labels, adj)
+            encoder = OneHotEncoder(sparse_output=False)
+            numerical_classes = labels.reshape(-1, 1)
+            labels = encoder.fit_transform(numerical_classes)
+            
+            self._add_edges(test_indexs, val_indexs, train_indexs, adj, dataSet)
+            
+            setattr(self, dataSet + '_test', test_indexs)
+            setattr(self, dataSet + '_val', val_indexs)
+            setattr(self, dataSet + '_train', train_indexs)
+            setattr(self, dataSet + '_feats', feature.toarray())
+            setattr(self, dataSet + '_labels', labels)
+            setattr(self, dataSet + '_adj_lists', adj)
+            setattr(self, dataSet + '_edge_labels', edge_labels.toarray())
+            setattr(self, dataSet + '_mapping_details', mapping_details)
+
+
         if dataSet == "ACM":
             obj = []
             adj_file_name = "./datasets/ACM/edges.pkl"

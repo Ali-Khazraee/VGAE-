@@ -527,3 +527,129 @@ class LabelClassifier(nn.Module):
         return y_pred
 
 
+
+class RGCN_layer(torch.nn.Module):
+    def __init__(self, in_feature, out=32, numRel=1):
+        super(RGCN_layer, self).__init__()
+        self.GCNLayer= torch.nn.ModuleList([GraphConv(in_feature, out, activation=None, bias=False, weight=True, allow_zero_in_degree=True) for i in range(numRel)])
+        self.numRel = numRel
+
+    def forward(self, A, X):
+        # print("Input X shape in RGCN_layer:", X.shape)
+        # print("Number of nodes in graph:", A[0].number_of_nodes() if isinstance(A, list) else A.number_of_nodes())
+        mes = []
+        for i in range(self.numRel):
+            if type(A) == list:
+                mes.append(self.GCNLayer[i](A[i],X))
+            else:
+                mes.append(self.GCNLayer[i](A,X))
+        Z = torch.stack(mes, dim=0).sum(0)
+
+        return Z
+
+
+class RGCN(torch.nn.Module):
+    def __init__(self, in_feature, rel_num,  layers=[64], drop_out_rate=0):
+        """
+        :param in_feature: the size of input feature; X.shape()[1]
+        :param rel_num: Number of Observed Layers (L')
+        :param layers: a list in which each element determine the size of corresponding GCNN Layer.
+        """
+        super(RGCN, self).__init__()
+        layers = [in_feature] + layers
+        if len(layers) < 1: raise Exception("sorry, you need at least two layer")
+
+        self.ConvLayers = torch.nn.ModuleList(
+            RGCN_layer(layers[i], layers[i + 1], rel_num) for i in range(len(layers) - 1))
+        self.dropout = torch.nn.Dropout(drop_out_rate)
+
+    def forward(self, adj, x):
+
+        for conv_layer in self.ConvLayers:
+            x = torch.tanh(conv_layer(adj, x))
+            x = self.dropout(x)
+
+        return x
+
+# LL implementation of S-VGAE+
+class RGCN_Encoder(torch.nn.Module):
+    def __init__(self, in_feature,  num_relation, latent_dim=32, layers=[64, 64], DropOut_rate=0):
+        """
+        :param in_feature: the size of input feature; X.shape()[1]
+        :param num_relation: Number of  Layers or edge types (L)
+        :param layers: a list in which each element determine the size of corresponding GCNN Layer.
+        """
+        # num_relation = 1
+        super(RGCN_Encoder, self).__init__()
+
+        self.RGCNs = RGCN(in_feature, num_relation, layers, DropOut_rate)
+
+        self.q_z_mean = RGCN_layer(layers[-1] , latent_dim,num_relation)
+        self.q_z_std = RGCN_layer(layers[-1] , latent_dim,num_relation)
+
+    def forward(self, adj, x, edge_type=None):
+
+        Z = self.RGCNs(adj, x)
+
+        m_q_z = self.q_z_mean(adj, Z)
+        # m_q_z = m_q_z / (.0001+m_q_z.norm(dim=-1, keepdim=True))
+
+        # the `+ 1` prevent collapsing behaviors
+        # std_q_z = F.softplus(self.q_z_std( adj,Z)) + 1
+        std_q_z = torch.relu(self.q_z_std(adj, Z)) + .0001
+
+        z = self.reparameterize(m_q_z, std_q_z)
+        return z, m_q_z, std_q_z,
+
+    def reparameterize(self, mean, std):
+        eps = torch.randn_like(std)
+        return eps.mul(std).add(mean)
+
+
+
+class MultiRelational_SBM_decoder(torch.nn.Module):
+    """This decoder is implemetation of DGLFRM decoder id which A = f(Z) Lambda F(Z)^{t} """
+
+    def __init__(self, number_of_rel, Lambda_dim, in_dim, normalize, DropOut_rate, node_trns_layers= [32] ):
+        """
+        :param in_dim: the size of input feature; X.shape()[1]
+        :param number_of_rel: Number of Latent Layers
+        :param Lambda_dim: dimention of Lambda matrix in sbm model, or the dimention of Z in the decoder after final transformation
+        :param node_trns_layers: a list in which each element determine the size of corresponding GCNN Layer.
+        :param normalize: bool which indicate either use norm layer or not
+        """
+        super(MultiRelational_SBM_decoder, self).__init__()
+
+        self.nodeTransformer = torch.nn.ModuleList(
+            node_mlp(in_dim, node_trns_layers +[Lambda_dim], normalize, DropOut_rate) for i in range(number_of_rel))
+
+        self.lambdas = torch.nn.ParameterList(
+            torch.nn.Parameter(torch.Tensor(Lambda_dim, Lambda_dim)) for i in range(number_of_rel))
+        self.numb_of_rel = number_of_rel
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        for i, weight in enumerate(self.lambdas):
+            self.lambdas[i] = init.xavier_uniform_(weight)
+
+    def forward(self, in_tensor):
+        gen_adj = []
+        for i in range(self.numb_of_rel):
+            z = self.nodeTransformer[i](in_tensor)
+            h = torch.mm(z, (torch.mm(self.lambdas[i], z.t())))
+            gen_adj.append(h)
+        return torch.stack(gen_adj)
+
+    def get_node_features(self, in_tensor):
+        Z = []
+        for i in range(self.numb_of_rel):
+            Z.append(self.nodeTransformer[i](in_tensor))
+        return Z
+
+    def get_edge_features(self, in_ten):
+        A = []
+        for i in range(self.numb_of_rel):
+            z = self.nodeTransformer[i](in_ten)
+            layer_i = torch.mm(z, (torch.mm(self.lambdas[i], z.t())))
+            A.append(layer_i)
+        return A

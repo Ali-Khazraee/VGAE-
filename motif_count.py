@@ -4,6 +4,7 @@ from pymysql import connect
 from pandas import DataFrame
 from itertools import permutations
 from math import log
+import pickle
 
 class Motif_Count:
 # Motif_Count class for counting motifs in graphs based on given rules
@@ -41,6 +42,42 @@ class Motif_Count:
         
         # self.setup_function()
 
+
+
+    def load_setup_variables(self, file_path):
+        """
+        Load all important variables from a .pkl file.
+        
+        Parameters:
+            file_path (str): Path to the .pkl file to load the variables.
+        """
+        with open(file_path, "rb") as f:
+            important_variables = pickle.load(f)
+
+        # Assign loaded variables to class attributes
+        self.entities = important_variables["entities"]
+        self.relations = important_variables["relations"]
+        self.keys = important_variables["keys"]
+        self.matrices = important_variables["matrices"]
+        self.rules = important_variables["rules"]
+        self.indices = important_variables["indices"]
+        self.attributes = important_variables["attributes"]
+        self.base_indices = important_variables["base_indices"]
+        self.mask_indices = important_variables["mask_indices"]
+        self.sort_indices = important_variables["sort_indices"]
+        self.stack_indices = important_variables["stack_indices"]
+        self.values = important_variables["values"]
+        self.prunes = important_variables["prunes"]
+        self.functors = important_variables["functors"]
+        self.variables = important_variables["variables"]
+        self.nodes = important_variables["nodes"]
+        self.states = important_variables["states"]
+        self.masks = important_variables["masks"]
+        self.multiples = important_variables["multiples"]
+
+
+
+
 # Main setup function to initialize data structures and process rules
     def setup_function(self):
         """
@@ -48,24 +85,27 @@ class Motif_Count:
         mask matrices, and process rules and values.
         """
         # Fetch data from SQL
-        self.fetch_data_from_sql()
+        # self.fetch_data_from_sql()
 
-        # Create indices for quick lookup
-        self.create_indices()
+        # # Create indices for quick lookup
+        # self.create_indices()
 
-        # Create mask matrices based on relations
-        self.create_mask_matrices()
+        # # Create mask matrices based on relations
+        # self.create_mask_matrices()
 
-        # Process rules and values for motif counting
-        self.process_rules()
+        # # Process rules and values for motif counting
+        # self.process_rules()
 
-        # Close database connections
-        self.cursor.close()
-        self.connection.close()
-        self.cursor_setup.close()
-        self.connection_setup.close()
-        self.cursor_bn.close()
-        self.connection_bn.close()
+        # # Close database connections
+        # self.cursor.close()
+        # self.connection.close()
+        # self.cursor_setup.close()
+        # self.connection_setup.close()
+        # self.cursor_bn.close()
+        # self.connection_bn.close()
+
+
+        self.load_setup_variables('hetero_imdb.pkl')
 
 
 # Fetch data from the SQL database and establish connections
@@ -473,7 +513,12 @@ class Motif_Count:
 
         for table in range(len(self.rules)):
             indexx = -1
+
+            # if table not in (17, 18):
+            #     continue
+            print(self.rules[table])
             for table_row in self.values[table]:
+                
                 indexx += 1
                 # Compute unmasked matrices for the current rule and table row
                 unmasked_matrices, functor_value_dict, counter, counter_c1 = self.compute_unmasked_matrices(
@@ -498,6 +543,8 @@ class Motif_Count:
                     motif_list.append(torch.sum(result) * self.prunes[table][indexx]) 
                 else:
                     motif_list.append(torch.sum(result))
+                    
+                    print(torch.sum(result))
 
                 # Clean up to free memory
                 del unmasked_matrices, masked_matrices, sorted_matrices, stacked_matrices, result
@@ -796,78 +843,73 @@ class Motif_Count:
             result = torch.mm(result, stacked_matrices[k])
         return result
 
-
-# Process reconstructed adjacency and feature matrices to update internal matrices
     def process_reconstructed_data(self, mapping_details, reconstructed_adjacency, reconstructed_x,
-                                   important_feat_ids, reconstructed_labels):
+                                important_feat_ids, reconstructed_labels):
         """
-        Process reconstructed adjacency and feature matrices to update internal matrices.
+        Process reconstructed adjacency and feature matrices using pre-calculated reverse mapping.
+        Returns features and labels for all node types.
         """
         if self.args.graph_type == 'heterogeneous':
             # Map edge types to node types
-            edge_encoding_to_node_types = {v: k for k, v in mapping_details['edge_type_encoding'].items()}
-            filtered_reconstruct_adj = []
+            edge_encoding_to_node_types = {}
+            for node_types, encoding in mapping_details['edge_type_encoding'].items():
+                if encoding in edge_encoding_to_node_types:
+                    edge_encoding_to_node_types[encoding].append(node_types)
+                else:
+                    edge_encoding_to_node_types[encoding] = [node_types]
             
-            for idx, adj_matrix in enumerate(reconstructed_adjacency):
-                # Get source and destination node types
-                node_types = edge_encoding_to_node_types[idx + 1]  
-                src_type, dst_type = node_types
-
-                # Get indices for slicing
-                src_start, src_end = mapping_details['node_type_to_index_map'][src_type]
-                dst_start, dst_end = mapping_details['node_type_to_index_map'][dst_type]
-
-                # Slice the adjacency matrix
-                filtered_matrix = adj_matrix[src_start:src_end, dst_start:dst_end]
-                filtered_reconstruct_adj.append(filtered_matrix)
+            filtered_reconstruct_adj = []
+            matrix_metadata = []
+            
+            for encoding, node_types_list in edge_encoding_to_node_types.items():
+                adj_matrix = reconstructed_adjacency[encoding - 1]
+                
+                for node_types in node_types_list:
+                    src_type, dst_type = node_types
+                    # Use the pre-calculated reverse mapping
+                    src_rev_indices = mapping_details['reverse_mapping'][src_type]
+                    dst_rev_indices = mapping_details['reverse_mapping'][dst_type]
+                    
+                    # Extract the submatrix using reverse indices
+                    filtered_matrix = adj_matrix[src_rev_indices, :][:, dst_rev_indices]
+                    filtered_reconstruct_adj.append(filtered_matrix)
+                    
+                    matrix_metadata.append({
+                        'src_type': src_type,
+                        'dst_type': dst_type,
+                        'shape': filtered_matrix.shape
+                    })
             
             # Convert matrices to tensors and move to device
             filtered_reconstruct_adj_tensors = [matrix.to(self.device) for matrix in filtered_reconstruct_adj]
             
-            for filtered_matrix in filtered_reconstruct_adj_tensors:
-                filtered_shape = filtered_matrix.shape 
+            # Update self.matrices with reconstructed matrices
+            for idx, filtered_matrix in enumerate(filtered_reconstruct_adj_tensors):
+                meta = matrix_metadata[idx]
+                matrix_key = f"{meta['src_type']}s_{meta['dst_type']}s"
                 
-                for key, matrix in self.matrices.items():
-                    # Update internal matrices with reconstructed ones
-                    if matrix.shape == filtered_shape or matrix.shape == filtered_matrix.T.shape:
-                        if filtered_matrix.size() == self.matrices[key].size():
-                            self.matrices[key] = filtered_matrix.to(self.device)
-                        elif filtered_matrix.T.size() == self.matrices[key].size():
-                            self.matrices[key] = filtered_matrix.T.to(self.device)
-                        break 
-                    
-            # Split reconstructed features based on node types
+                # if matrix_key in self.matrices:
+                #     if filtered_matrix.size() == self.matrices[matrix_key].size():
+                self.matrices[matrix_key] = filtered_matrix
+                    # else:
+                    #     print(f"Size mismatch for {matrix_key}: Expected {self.matrices[matrix_key].size()}, got {filtered_matrix.size()}")
+            
+            # Handle node features using reverse mapping
             reconstructed_x_splits = {}
-            for node_type, (start_idx, end_idx) in mapping_details['node_type_to_index_map'].items():
-                reconstructed_x_splits[f"{node_type}"] = reconstructed_x[start_idx:end_idx,:].to(self.device)
-                
-            # Identify node types that appear multiple times
-            node_type_counts = {}
-            for node_types in mapping_details['edge_type_encoding'].keys():
-                for node_type in node_types:
-                    if node_type in node_type_counts:
-                        node_type_counts[node_type] += 1
-                    else:
-                        node_type_counts[node_type] = 1
-
-            repeated_node_types = [node_type for node_type, count in node_type_counts.items() if count > 1]
-            st_idx, en_idx = mapping_details['node_type_to_index_map'][repeated_node_types[0]]
-            reconstructed_labels_m = reconstructed_labels[st_idx:en_idx].to(self.device)
+            for node_type, rev_indices in mapping_details['reverse_mapping'].items():
+                reconstructed_x_splits[node_type] = reconstructed_x[rev_indices].to(self.device)
+            
+            # Handle labels for all node types
+            reconstructed_labels = reconstructed_labels.to(self.device)
                 
         else:
-            # For homogeneous graphs
+            # Homogeneous case remains unchanged
             reconstructed_x_splits = reconstructed_x.to(self.device)
             key = list(self.matrices.keys())[0]
             self.matrices[key] = reconstructed_adjacency[0].to(self.device)
-            reconstructed_labels_m = reconstructed_labels.to(self.device)
+            reconstructed_labels = reconstructed_labels.to(self.device)
 
-        return reconstructed_x_splits, reconstructed_labels_m
-
-
-
-        # Update the internal matrices with the training adjacency matrices
-
-
+        return reconstructed_x_splits, reconstructed_labels
 #Update the internal matrices with the training adjacency matrices.
     def update_matrices(self, mapping_details, adj_with_self_loops):
         """

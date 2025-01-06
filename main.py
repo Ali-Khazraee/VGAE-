@@ -34,22 +34,22 @@ warnings.simplefilter('ignore')
 
 parser = argparse.ArgumentParser(description='Inductive')
 
-parser.add_argument('--e', type=int, dest="epoch_number", default=100, help="Number of Epochs")
-parser.add_argument('--dataSet', type=str, default="Cora_dgl")
-parser.add_argument('--loss_type', dest="loss_type", default="2", help="type of combination between loss_A and loss_F")
+parser.add_argument('--e', type=int, dest="epoch_number", default=1, help="Number of Epochs")
+parser.add_argument('--dataSet', type=str, default="imdb-multi")
+parser.add_argument('--loss_type', dest="loss_type", default="1", help="type of combination between loss_A and loss_F")
 parser.add_argument('--sampling_method', dest="sampling_method", default="deterministic", help="This var shows sampling method it could be: monte, importance_sampling, deterministic")
 parser.add_argument('--method', dest="method", default="single", help="This var shows method it could be: multi, single")
 parser.add_argument('--iterative', dest="iterative", default="False", type=str, help="This flag is used if want to have iterative link prediction")
-parser.add_argument('--tuning', dest="tuning", default="False", type=str, help="This flag is used if want to tune hyperparameters in helper_opt")
+parser.add_argument('--tuning', dest="tuning", default="True", type=str, help="This flag is used if want to tune hyperparameters in helper_opt")
 
 
 parser.add_argument('--seed', type=int, default=123)
 parser.add_argument('--num_node', dest="num_node", default=-1, type=str,
                     help="the size of subgraph which is sampled; -1 means use the whole graph")
-parser.add_argument('--decoder_type', dest="decoder_type", default="ML_SBM",help="the decoder type")
-parser.add_argument('--encoder_type', dest="encoder_type", default="Multi_GAT",
+parser.add_argument('--decoder_type', dest="decoder_type", default="MultiRelational_SBM_decoder",help="the decoder type")
+parser.add_argument('--encoder_type', dest="encoder_type", default="RGCN_Encoder",
                     help="the encoder type, Either Multi_GIN, Multi_GCN, Multi_GAT, Multi_SAGE")
-parser.add_argument('--NofRels', dest="num_of_relations", default=1,
+parser.add_argument('--NofRels', dest="num_of_relations", default=2,
                     help="Number of latent or known relation; number of deltas in SBM")
 parser.add_argument('--NofCom', dest="num_of_comunities", default=128,
                     help="Number of comunites, tor latent space dimention; len(z)")
@@ -67,11 +67,11 @@ parser.add_argument('--transductive', dest="transductive", default="True", type=
                     help="This flag is used if want to have transductive link prediction")
 parser.add_argument('--edge_base', dest="edge_base", default="True", type=str,
                     help="This flag is used if want to have edge base data splitting")
-parser.add_argument('-motif_obj', dest="motif_obj", default= True , help="adds motif_loss term to objective function")
-parser.add_argument('-rp', dest="rule_prune",  default= True , help="Toggle rule pruning on or off")
+parser.add_argument('-motif_obj', dest="motif_obj", default= False , help="adds motif_loss term to objective function")
+parser.add_argument('-rp', dest="rule_prune",  default= False , help="Toggle rule pruning on or off")
 parser.add_argument('-rw', dest="rule_weight",  default= False , help="Toggle rule weighting on or off - If you want to use rule weighting, you need to turn on rule pruning first by setting it to True.")
 parser.add_argument('-dr', dest="devide_rec_adj",  default= False , help="This switch will divide reconstructed adjacency matrix by 1/n in every epoch")
-parser.add_argument('-graph_type', dest="graph_type", default="homogeneous", choices=["homogeneous", "heterogeneous"], help="Choose the graph type: homogeneous or heterogeneous")
+parser.add_argument('-graph_type', dest="graph_type", default="heterogeneous", choices=["homogeneous", "heterogeneous"], help="Choose the graph type: homogeneous or heterogeneous")
 parser.add_argument('--graph_realism', type=bool, default=False,
                     help="Set to True to enable graph realism evaluation, or False to disable it.")
 
@@ -109,6 +109,27 @@ val_indx = getattr(data_center, ds + '_val_edge_idx')
 train_indx = getattr(data_center, ds + '_train_edge_idx')
 ignore_edges = getattr(data_center, ds + '_ignore_edges_inx')
 adj_test = getattr(data_center, ds + '_adj_test')
+edge_labels = getattr(data_center, ds + '_edge_labels')
+
+
+
+edge_relType = sp.csr_matrix(np.multiply(edge_labels, org_adj))
+
+rel_type = np.unique(edge_labels[edge_labels != 0])
+
+# Initialize training matrices
+
+org_adj_list = []
+
+for rel_num in rel_type:
+
+    tm_mtrix = sp.csr_matrix(edge_relType.shape)
+
+    tm_mtrix[edge_relType == int(rel_num)] = 1
+
+    org_adj_list.append(np.array(tm_mtrix.todense()))
+
+
 
 
 
@@ -186,13 +207,13 @@ if fully_inductive:
     org_adj[i_list, j_list] = 0  # set all the in between edges to 0
 
 # run recognition separately for the case of single_link
-std_z_recog, m_z_recog, z_recog, re_adj_recog, re_feat_recog, re_recog_labels = run_network(features, org_adj, labels, inductive_model, targets, sampling_method,
+std_z_recog, m_z_recog, z_recog, re_adj_recog, re_feat_recog, re_recog_labels = run_network(features, org_adj_list, labels, inductive_model, targets, sampling_method,
                                                             is_prior=False)
 if args.edge_base:
     res = adj_test.nonzero()
     test_edges = np.array([res[0], res[1]]).T
     auc, val_acc, val_ap, precision, recall, HR, auc_l, acc_l, ap_l, precision_l, recall_l, F1_score = test(test_edges,
-                                                                                                            org_adj,
+                                                                                                            org_adj_list,
                                                                                                             run_network,
                                                                                                             features,
                                                                                                             labels,
@@ -411,12 +432,17 @@ else:
         recall_list_label.append(recall_l)
         F1_list_label.append(F1_score)
 
-auc_list.append(auc)
-acc_list.append(val_acc)
-ap_list.append(val_ap)
-precision_list.append(precision)
-recall_list.append(recall)
-HR_list.append(HR)
+num_relations = len(auc)  # Since auc is already a list of metrics for each relation
+
+# Create separate lists for each relation
+auc_lists = [[] for _ in range(num_relations)]
+acc_lists = [[] for _ in range(num_relations)]
+ap_lists = [[] for _ in range(num_relations)]
+precision_lists = [[] for _ in range(num_relations)]
+recall_lists = [[] for _ in range(num_relations)]
+HR_lists = [[] for _ in range(num_relations)]
+
+# Lists for node classification remain the same
 auc_list_label.append(auc_l)
 acc_list_label.append(acc_l)
 ap_list_label.append(ap_l)
@@ -424,129 +450,132 @@ precision_list_label.append(precision_l)
 recall_list_label.append(recall_l)
 F1_list_label.append(F1_score)
 
+# Append metrics for each relation
+for rel_idx in range(num_relations):
+    auc_lists[rel_idx].append(auc[rel_idx])
+    acc_lists[rel_idx].append(val_acc[rel_idx])
+    ap_lists[rel_idx].append(val_ap[rel_idx])
+    precision_lists[rel_idx].append(precision[rel_idx])
+    recall_lists[rel_idx].append(recall[rel_idx])
+    HR_lists[rel_idx].append(HR[rel_idx])
 
-# Print results
+# File naming logic remains the same
 if fully_inductive:
-    save_recons_adj_name =args.encoder_type[-3:] + "_" + args.sampling_method + "_fully_" + args.method + "_" + args.dataSet
+    save_recons_adj_name = args.encoder_type[-3:] + "_" + args.sampling_method + "_fully_" + args.method + "_" + args.dataSet
 else:
     save_recons_adj_name = args.encoder_type[-3:] + "_" + args.sampling_method + "_semi_" + args.method + "_" + args.dataSet
 if args.transductive == "True":
     save_recons_adj_name = "Trans_"+ save_recons_adj_name
 else:
     save_recons_adj_name = "Ind_" + save_recons_adj_name
-
 save_recons_adj_name = save_recons_adj_name + "_" + args.loss_type
 print(save_recons_adj_name)
 end_time = time.time()
-print("time:")
-# print(end_time-start_time)
-if args.iterative == "True":
-    print("Link Prediction")
-    print("auc= %.3f , acc= %.3f ap= %.3f , precision= %.3f , recall= %.3f , HR= %.3f, nn= %.3f, w_ratio= %.3f" % (
-    statistics.mean(auc_list), statistics.mean(acc_list), statistics.mean(ap_list), statistics.mean(precision_list),
-    statistics.mean(recall_list), statistics.mean(HR_list), statistics.mean(num_neighbour)))
-    with open('./results.csv', 'a', newline="\n") as f:
-        writer = csv.writer(f)
-        writer.writerow(
-            ["itr_"+save_recons_adj_name, statistics.mean(auc_list), statistics.mean(acc_list),
-             statistics.mean(ap_list),
-             statistics.mean(precision_list), statistics.mean(recall_list), statistics.mean(HR_list), statistics.mean(num_neighbour)])
-else:
-    print("Link Prediction")
+
+# Print results for each relation
+print("Link Prediction Results by Relation:")
+for rel_idx in range(num_relations):
+    print(f"Relation {rel_idx + 1}:")
     print("auc= %.3f , acc= %.3f ap= %.3f , precision= %.3f , recall= %.3f , HR= %.3f" % (
-    statistics.mean(auc_list), statistics.mean(acc_list), statistics.mean(ap_list), statistics.mean(precision_list),
-    statistics.mean(recall_list), statistics.mean(HR_list)))
+        statistics.mean(auc_lists[rel_idx]), 
+        statistics.mean(acc_lists[rel_idx]), 
+        statistics.mean(ap_lists[rel_idx]), 
+        statistics.mean(precision_lists[rel_idx]),
+        statistics.mean(recall_lists[rel_idx]), 
+        statistics.mean(HR_lists[rel_idx])))
+    
+    # Write results to CSV
     with open('./results.csv', 'a', newline="\n") as f:
         writer = csv.writer(f)
+        prefix = "itr_" if args.iterative == "True" else ""
         writer.writerow(
-            [save_recons_adj_name, statistics.mean(auc_list), statistics.mean(acc_list),
-             statistics.mean(ap_list),
-             statistics.mean(precision_list), statistics.mean(recall_list), statistics.mean(HR_list)])
+            [f"{prefix}rel{rel_idx+1}_"+save_recons_adj_name, 
+             statistics.mean(auc_lists[rel_idx]), 
+             statistics.mean(acc_lists[rel_idx]),
+             statistics.mean(ap_lists[rel_idx]),
+             statistics.mean(precision_lists[rel_idx]), 
+             statistics.mean(recall_lists[rel_idx]), 
+             statistics.mean(HR_lists[rel_idx])])
 
-# print("Link Prediction std")
-# print("auc= %.3f , acc= %.3f ap= %.3f , precision= %.3f , recall= %.3f , HR= %.3f, pr_auc=%3f" % (
-# statistics.stdev(auc_list), statistics.stdev(acc_list), statistics.stdev(ap_list), statistics.stdev(precision_list),
-# statistics.stdev(recall_list), statistics.stdev(HR_list), statistics.stdev(pr_auc_list)))
-
-
-
-print("Node Classification")
+# Print node classification results
+print("\nNode Classification")
 print("auc= %.3f , acc= %.3f ap= %.3f , precision= %.3f , recall= %.3f , F1_Score= %.3f" % (
-statistics.mean(auc_list_label), statistics.mean(acc_list_label), statistics.mean(ap_list_label),
-statistics.mean(precision_list_label), statistics.mean(recall_list_label), statistics.mean(F1_list_label)))
+    statistics.mean(auc_list_label), 
+    statistics.mean(acc_list_label), 
+    statistics.mean(ap_list_label),
+    statistics.mean(precision_list_label), 
+    statistics.mean(recall_list_label), 
+    statistics.mean(F1_list_label)))
 
-
+# Write node classification results to CSV
 with open('./results.csv', 'a', newline="\n") as f:
     writer = csv.writer(f)
-    writer.writerow(["labels_" + save_recons_adj_name, statistics.mean(auc_list_label), statistics.mean(acc_list_label),
-                     statistics.mean(ap_list_label), statistics.mean(precision_list_label),
-                     statistics.mean(recall_list_label), statistics.mean(F1_list_label)])
-
-
-
-
-
-
-
+    writer.writerow(["labels_" + save_recons_adj_name, 
+                     statistics.mean(auc_list_label), 
+                     statistics.mean(acc_list_label),
+                     statistics.mean(ap_list_label), 
+                     statistics.mean(precision_list_label),
+                     statistics.mean(recall_list_label), 
+                     statistics.mean(F1_list_label)])
 
 # evaluation on graph realism and motif count
 
-# if args.tuning == "False" and args.graph_realism == True:
-#     inductive_model.eval()
-#     dir = "GeneratedSamples/"+str(args.dataSet)
-#     setting="Rule_reg" if args.use_motif else "Vanila"
-#     dir+=setting+"/"
-#     SaveSamples(inductive_model, graph_dgl, features,adj_train, features[:,important_feat_ids].float(), dir,setting)
-#     gmm_metrics_dir = "GMM-metrics"  # Relative or absolute path
-#     script_name = "RuleEval.py"
-#     subprocess.run(["python", os.path.join(gmm_metrics_dir, script_name)], check=True)
+if args.tuning == "False" and args.graph_realism == True:
+    inductive_model.eval()
+    dir = "GeneratedSamples/"+str(args.dataSet)
+    setting="Rule_reg" if args.use_motif else "Vanila"
+    dir+=setting+"/"
+    SaveSamples(inductive_model, graph_dgl, features,adj_train, features[:,important_feat_ids].float(), dir,setting)
+    # gmm_metrics_dir = "GMM-metrics"  # Relative or absolute path
+    # script_name = "RuleEval.py"
+    # subprocess.run(["python", os.path.join(gmm_metrics_dir, script_name)], check=True)
 
 
 
-if args.tuning == "False" and args.motif_count_eval == True:
+# if args.tuning == "False" and args.motif_count_eval == True:
 
 
-    CMM = Motif_Count(args)
-    CMM.setup_function()
-    reconstructed_x_slice, reconstructed_labels_m = CMM.process_reconstructed_data(None, 
-    [torch.tensor(org_adj, dtype=torch.float64)], torch.tensor(features[:,np.array(data_center.important_feats_id)]), np.array(data_center.important_feats_id), torch.tensor(labels)
-)
-    metric_ground_truth = CMM.iteration_function(reconstructed_x_slice , reconstructed_labels_m, mode = "ground-truth")
+#     CMM = Motif_Count(args)
+#     CMM.setup_function()
+#     reconstructed_x_slice, reconstructed_labels_m = CMM.process_reconstructed_data(None, 
+#     [torch.tensor(org_adj, dtype=torch.float64)], torch.tensor(features[:,np.array(data_center.important_feats_id)]), np.array(data_center.important_feats_id), torch.tensor(labels)
+# )
+#     metric_ground_truth = CMM.iteration_function(reconstructed_x_slice , reconstructed_labels_m, mode = "ground-truth")
 
 
-    org_adj_sparse = sp.coo_matrix(org_adj)
-    metric_graph_dgl = dgl.from_scipy(org_adj_sparse)
+#     org_adj_sparse = sp.coo_matrix(org_adj)
+#     metric_graph_dgl = dgl.from_scipy(org_adj_sparse)
 
 
-    with torch.no_grad():  
+#     with torch.no_grad():  
 
-        std_z, m_z, z, reconstructed_adj, reconstructed_feat, re_labels = inductive_model(metric_graph_dgl, features, labels,
-                                                                                targets, sampling_method,
-                                                                                args.is_prior, train=False)
+#         std_z, m_z, z, reconstructed_adj, reconstructed_feat, re_labels = inductive_model(metric_graph_dgl, features, labels,
+#                                                                                 targets, sampling_method,
+#                                                                                 args.is_prior, train=False)
 
-        epsilon = torch.randn_like(std_z) 
-        sampled_z = m_z + epsilon * std_z  
+#         epsilon = torch.randn_like(std_z) 
+#         sampled_z = m_z + epsilon * std_z  
 
-        sampled_adj = inductive_model.generator(sampled_z)
+#         sampled_adj = inductive_model.generator(sampled_z)
 
-        sampled_features = inductive_model.generator_feat(sampled_z)
+#         sampled_features = inductive_model.generator_feat(sampled_z)
 
-        sampled_labels = inductive_model.classifier(sampled_z)
-
-
-
-    reconstructed_adjacency = torch.sigmoid(sampled_adj)
-    reconstructed_x_prob = torch.sigmoid(sampled_features)
-    reconstructed_labels_prob = torch.sigmoid(sampled_labels)
-
-
-    reconstructed_x_slice, reconstructed_labels_m = CMM.process_reconstructed_data(None, 
-    [reconstructed_adjacency], reconstructed_x_prob[:,np.array(data_center.important_feats_id)], np.array(data_center.important_feats_id), torch.tensor(reconstructed_labels_prob))
-    metric_predicted = CMM.iteration_function(reconstructed_x_slice , reconstructed_labels_m, mode = "metric-predicted")
-
-
-    closeness = torch.sqrt(F.mse_loss(torch.stack(metric_ground_truth), torch.stack(metric_predicted)))
+#         sampled_labels = inductive_model.classifier(sampled_z)
 
 
 
-    print('closensee = ', closeness)
+#     reconstructed_adjacency = torch.sigmoid(sampled_adj)
+#     reconstructed_x_prob = torch.sigmoid(sampled_features)
+#     reconstructed_labels_prob = torch.sigmoid(sampled_labels)
+
+
+#     reconstructed_x_slice, reconstructed_labels_m = CMM.process_reconstructed_data(None, 
+#     [reconstructed_adjacency], reconstructed_x_prob[:,np.array(data_center.important_feats_id)], np.array(data_center.important_feats_id), torch.tensor(reconstructed_labels_prob))
+#     metric_predicted = CMM.iteration_function(reconstructed_x_slice , reconstructed_labels_m, mode = "metric-predicted")
+
+
+#     closeness = torch.sqrt(F.mse_loss(torch.stack(metric_ground_truth), torch.stack(metric_predicted)))
+
+
+
+#     print('closensee = ', closeness)

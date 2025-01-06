@@ -20,55 +20,135 @@ from sklearn.metrics import f1_score
 
 from utils import *
 
-# objective Function
-def  optimizer_VAE (lambda_1,lambda_2, lambda_3,lambda_4, true_labels, reconstructed_labels, loss_type, pred, reconstructed_feat, labels, x, norm_feat, pos_weight_feat,  std_z, mean_z, num_nodes, pos_weight, norm, indexes, trainID, args, ground_truth, predicted):
+# # objective Function
+# def  optimizer_VAE (lambda_1,lambda_2, lambda_3,lambda_4, true_labels, reconstructed_labels, loss_type, pred, reconstructed_feat, labels, x, norm_feat, pos_weight_feat,  std_z, mean_z, num_nodes, pos_weight, norm, indexes, trainID, args, ground_truth, predicted):
     
     
-    if args.motif_obj == True: 
+#     if args.motif_obj == True: 
 
 
 
-        zero_indices = [i for i, t in enumerate(ground_truth) if torch.any(t == 0)]
+#         zero_indices = [i for i, t in enumerate(ground_truth) if torch.any(t == 0)]
 
-        filtered_ground_truth = [g for i, g in enumerate(ground_truth) if i not in zero_indices]
-        filtered_predicted = [p for i, p in enumerate(predicted) if i not in zero_indices]
+#         filtered_ground_truth = [g for i, g in enumerate(ground_truth) if i not in zero_indices]
+#         filtered_predicted = [p for i, p in enumerate(predicted) if i not in zero_indices]
 
-        normalized_ground_truth = [torch.ones_like(t) for t in filtered_ground_truth]
+#         normalized_ground_truth = [torch.ones_like(t) for t in filtered_ground_truth]
 
-        # normalized_predicted = [p / g for p, g in zip(filtered_predicted, filtered_ground_truth)]
+#         # normalized_predicted = [p / g for p, g in zip(filtered_predicted, filtered_ground_truth)]
 
-        normalized_predicted = [torch.abs((torch.log(p / g))) for p, g in zip(filtered_predicted, filtered_ground_truth)]
+#         normalized_predicted = [torch.abs((torch.log(p / g))) for p, g in zip(filtered_predicted, filtered_ground_truth)]
         
-        motif_loss = (((torch.sum(torch.stack(normalized_predicted))/len((normalized_predicted)))))
-    else: 
+#         motif_loss = (((torch.sum(torch.stack(normalized_predicted))/len((normalized_predicted)))))
+#     else: 
+#         motif_loss = 0
+    
+    
+    
+    
+#     val_poterior_cost = 0
+#     w_l = weight_labels(true_labels)
+#     # pos_weight = weight_edges(labels)
+#     # posterior_cost_edges = norm * F.binary_cross_entropy_with_logits(pred, labels, pos_weight=pos_weight)
+#     posterior_cost_edges = \
+#         (norm * F.binary_cross_entropy_with_logits(pred, labels, pos_weight=pos_weight, reduction = 'none')).mean()
+
+#     posterior_cost_features = norm_feat * F.binary_cross_entropy_with_logits(reconstructed_feat, x, pos_weight=pos_weight_feat)
+
+#     posterior_cost_classes = F.cross_entropy(reconstructed_labels, (torch.tensor(true_labels).to(torch.float64)))
+#     z_kl = (-0.5 / num_nodes) * torch.mean(torch.sum(1 + 2 * torch.log(std_z) - mean_z.pow(2) - (std_z).pow(2), dim=1))
+
+#     acc = (torch.sigmoid(pred).round() == labels).sum() / float(pred.shape[0] * pred.shape[1])
+#     adj_shape = labels.shape[0]*labels.shape[1]
+#     features_shape = x.shape[0]*x.shape[1]
+#     labels_shape = reconstructed_labels.shape[0]*reconstructed_labels.shape[1]
+
+#     if loss_type == "0":
+#         posterior_cost = posterior_cost_classes
+#     elif loss_type == "1":
+#         posterior_cost = (lambda_1) * posterior_cost_edges + (lambda_2) * posterior_cost_features + (lambda_3) * posterior_cost_classes
+#     elif loss_type == "2":
+#         posterior_cost = (lambda_1)* posterior_cost_edges + (lambda_2)* posterior_cost_features + (lambda_3) * posterior_cost_classes + (lambda_4) * motif_loss
+#     elif loss_type == "3":
+#         posterior_cost = posterior_cost_edges + posterior_cost_features + posterior_cost_classes
+#     elif loss_type == "4":
+#         posterior_cost = posterior_cost_edges + posterior_cost_features + posterior_cost_classes + motif_loss
+#     elif loss_type == "5":
+#         posterior_cost = posterior_cost_edges
+#     elif loss_type == "6":
+#         posterior_cost = posterior_cost_edges + motif_loss 
+#     elif loss_type == "7":
+#         posterior_cost = posterior_cost_edges + posterior_cost_classes
+
+
+
+    
+#     return z_kl, posterior_cost,posterior_cost_edges ,posterior_cost_features , posterior_cost_classes, acc, val_poterior_cost, posterior_cost_edges, posterior_cost_features, motif_loss
+
+
+
+def optimizer_VAE(lambda_1, lambda_2, lambda_3, lambda_4, true_labels, reconstructed_labels, 
+                 loss_type, pred_stack, reconstructed_feat, adj_train, x, norm_feat, 
+                 pos_weight_feat, std_z, mean_z, num_nodes, pos_weights_train, norms_train, 
+                 indexes, trainID, args, ground_truth, predicted):
+    
+    if isinstance(adj_train, (list, tuple)):
+        adj_tensors = [torch.tensor(adj) if not isinstance(adj, torch.Tensor) else adj 
+                      for adj in adj_train]
+        adj_train = torch.stack(adj_tensors)
+    elif not isinstance(adj_train, torch.Tensor):
+        adj_train = torch.tensor(adj_train)
+    
+    if len(adj_train.shape) == 2:
+        adj_train = adj_train.expand(2, -1, -1)
+    
+    adj_train = adj_train.to(pred_stack.dtype).to(pred_stack.device)
+
+    norms_tensor = torch.tensor(norms_train).view(-1, 1, 1)       
+    pos_weights_tensor = torch.tensor(pos_weights_train).view(-1, 1, 1)  
+
+    if args.motif_obj:
+        non_zero_mask = ground_truth != 0
+        valid_predictions = predicted[non_zero_mask]
+        valid_ground_truth = ground_truth[non_zero_mask]
+        normalized_predicted = torch.abs(torch.log(valid_predictions / valid_ground_truth))
+        motif_loss = normalized_predicted.mean()
+    else:
         motif_loss = 0
     
+    posterior_cost_edges = (norms_tensor * F.binary_cross_entropy_with_logits(
+        pred_stack, adj_train,
+        pos_weight=pos_weights_tensor,
+        reduction='none'
+    )).mean()
     
+    # Feature reconstruction loss
+    posterior_cost_features = norm_feat * F.binary_cross_entropy_with_logits(
+        reconstructed_feat, x, pos_weight=pos_weight_feat
+    )
     
+    # Classification loss
+    posterior_cost_classes = F.cross_entropy(
+        reconstructed_labels, torch.tensor(true_labels).to(torch.float64)
+    )
     
-    val_poterior_cost = 0
-    w_l = weight_labels(true_labels)
-    # pos_weight = weight_edges(labels)
-    # posterior_cost_edges = norm * F.binary_cross_entropy_with_logits(pred, labels, pos_weight=pos_weight)
-    posterior_cost_edges = \
-        (norm * F.binary_cross_entropy_with_logits(pred, labels, pos_weight=pos_weight, reduction = 'none')).mean()
+    # KL divergence
+    z_kl = (-0.5 / num_nodes) * torch.mean(
+        torch.sum(1 + 2 * torch.log(std_z) - mean_z.pow(2) - (std_z).pow(2), dim=1)
+    )
+    
+    # Accuracy computation for all relations
+    acc = (torch.sigmoid(pred_stack).round() == adj_train).float().mean()
 
-    posterior_cost_features = norm_feat * F.binary_cross_entropy_with_logits(reconstructed_feat, x, pos_weight=pos_weight_feat)
-
-    posterior_cost_classes = F.cross_entropy(reconstructed_labels, (torch.tensor(true_labels).to(torch.float64)))
-    z_kl = (-0.5 / num_nodes) * torch.mean(torch.sum(1 + 2 * torch.log(std_z) - mean_z.pow(2) - (std_z).pow(2), dim=1))
-
-    acc = (torch.sigmoid(pred).round() == labels).sum() / float(pred.shape[0] * pred.shape[1])
-    adj_shape = labels.shape[0]*labels.shape[1]
-    features_shape = x.shape[0]*x.shape[1]
-    labels_shape = reconstructed_labels.shape[0]*reconstructed_labels.shape[1]
-
+    val_posterior_cost = 0  # Corrected typo in variable name
+    
+    # Combine losses based on loss_type
     if loss_type == "0":
         posterior_cost = posterior_cost_classes
     elif loss_type == "1":
         posterior_cost = (lambda_1) * posterior_cost_edges + (lambda_2) * posterior_cost_features + (lambda_3) * posterior_cost_classes
     elif loss_type == "2":
-        posterior_cost = (lambda_1)* posterior_cost_edges + (lambda_2)* posterior_cost_features + (lambda_3) * posterior_cost_classes + (lambda_4) * motif_loss
+        posterior_cost = (lambda_1) * posterior_cost_edges + (lambda_2) * posterior_cost_features + (lambda_3) * posterior_cost_classes + (lambda_4) * motif_loss
     elif loss_type == "3":
         posterior_cost = posterior_cost_edges + posterior_cost_features + posterior_cost_classes
     elif loss_type == "4":
@@ -76,12 +156,10 @@ def  optimizer_VAE (lambda_1,lambda_2, lambda_3,lambda_4, true_labels, reconstru
     elif loss_type == "5":
         posterior_cost = posterior_cost_edges
     elif loss_type == "6":
-        posterior_cost = posterior_cost_edges + motif_loss 
+        posterior_cost = posterior_cost_edges + motif_loss
     elif loss_type == "7":
         posterior_cost = posterior_cost_edges + posterior_cost_classes
-
-
-
     
-    return z_kl, posterior_cost,posterior_cost_edges ,posterior_cost_features , posterior_cost_classes, acc, val_poterior_cost, posterior_cost_edges, posterior_cost_features, motif_loss
-
+    return (z_kl, posterior_cost, posterior_cost_edges, posterior_cost_features, 
+            posterior_cost_classes, acc, val_posterior_cost, posterior_cost_edges, 
+            posterior_cost_features, motif_loss)
