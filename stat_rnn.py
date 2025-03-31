@@ -194,7 +194,7 @@ def orca(graph):
     return node_orbit_counts
 
 
-def motif_stats(graph_ref_list, graph_pred_list, motif_type='4cycle', ground_truth_match=None, bins=100):
+def motif_stats(graph_ref_list, graph_pred_list, motif_type='4cycle', observed_match=None, bins=100):
     # graph motif counts (int for each graph)
     # normalized by graph size
     total_counts_ref = []
@@ -209,10 +209,10 @@ def motif_stats(graph_ref_list, graph_pred_list, motif_type='4cycle', ground_tru
         orbit_counts = orca(G)
         motif_counts = np.sum(orbit_counts[:, indices], axis=1)
 
-        if ground_truth_match is not None:
+        if observed_match is not None:
             match_cnt = 0
             for elem in motif_counts:
-                if elem == ground_truth_match:
+                if elem == observed_match:
                     match_cnt += 1
             num_matches_ref.append(match_cnt / G.number_of_nodes())
 
@@ -225,10 +225,10 @@ def motif_stats(graph_ref_list, graph_pred_list, motif_type='4cycle', ground_tru
         orbit_counts = orca(G)
         motif_counts = np.sum(orbit_counts[:, indices], axis=1)
 
-        if ground_truth_match is not None:
+        if observed_match is not None:
             match_cnt = 0
             for elem in motif_counts:
-                if elem == ground_truth_match:
+                if elem == observed_match:
                     match_cnt += 1
             num_matches_pred.append(match_cnt / G.number_of_nodes())
 

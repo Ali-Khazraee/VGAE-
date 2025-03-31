@@ -1,2 +1,12 @@
 datasets/
 datasets/
+ACM/
+DBLP/
+IMDB/
+acm_no_prune.pkl
+acm_no_prune.zip
+cora_no_prune.pkl
+data.zip
+imdb_no_prune.pkl
+imdb_no_prune.zip
+test.py

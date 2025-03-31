@@ -31,6 +31,8 @@ from torch.hub import download_url_to_file
 import copy
 
 from utils import reduce_node_features
+import scipy.sparse
+
 
 
 def parse_index_file(filename):
@@ -277,7 +279,7 @@ class DataCenter():
         if dataSet == "IMDB":
             obj = []
 
-            adj_file_name = "./datasets/IMDB/edges.pkl"
+            adj_file_name = "IMDB/edges.pkl"
 
             with open(adj_file_name, 'rb') as f:
                 obj.append(pkl.load(f))
@@ -300,7 +302,7 @@ class DataCenter():
             node_label.extend([2 for i in range(in_2, in_3)])
 
             obj = []
-            with open("./datasets/IMDB/node_features.pkl", 'rb') as f:
+            with open("IMDB/node_features.pkl", 'rb') as f:
                 obj.append(pkl.load(f))
             feature = sp.csr_matrix(obj[0])
             feature = sp.csr_matrix(obj[0])
@@ -317,6 +319,12 @@ class DataCenter():
 
             self._add_edges(test_indexs, val_indexs, train_indexs, adj, dataSet)
 
+
+            random_seed = 0
+            reduced_features, important_feats = reduce_node_features(feature.toarray(), labels, random_seed)
+
+            self.important_feats_id = important_feats
+
             setattr(self, dataSet + '_test', test_indexs)
             setattr(self, dataSet + '_val', val_indexs)
             setattr(self, dataSet + '_train', train_indexs)
@@ -328,26 +336,18 @@ class DataCenter():
 
         if dataSet == "ACM":
             obj = []
-            adj_file_name = "./datasets/ACM/edges.pkl"
+
+            adj_file_name = "ACM/edges.pkl"
+
             with open(adj_file_name, 'rb') as f:
                 obj.append(pkl.load(f))
 
-            adj = sp.csr_matrix(obj[0][0].shape)
-            for matrix in obj:
-                nnz = matrix[0].nonzero()  # indices of nonzero values
-                for i, j in zip(nnz[0], nnz[1]):
-                    adj[i, j] = 1
-                    adj[j, i] = 1
-                # adj +=matrix[0]
+            # merging diffrent edge type into a single adj matrix
+            adj = lil_matrix(obj[0][0].shape)
+            for matrix in obj[0]:
+                adj += matrix
 
-            # to fix the bug on running GraphSAGE
-            adj = adj.toarray()
-            for i in range(len(adj)):
-                if sum(adj[i, :]) == 0:
-                    idx = np.random.randint(0, len(adj))
-                    adj[i, idx] = 1
-                    adj[idx, i] = 1
-
+            matrix = obj[0]
             edge_labels = matrix[0] + matrix[1]
             edge_labels += (matrix[2] + matrix[3]) * 2
 
@@ -360,19 +360,28 @@ class DataCenter():
             node_label.extend([2 for i in range(in_2, in_3)])
 
             obj = []
-            with open("./datasets/ACM/node_features.pkl", 'rb') as f:
+            with open("ACM/node_features.pkl", 'rb') as f:
                 obj.append(pkl.load(f))
+            feature = sp.csr_matrix(obj[0])
             feature = sp.csr_matrix(obj[0])
 
             index = -1
-            # test_indexs, val_indexs, train_indexs = self._split_data(feature[:index],adj[:index, :index])
-
             labels = np.asarray(node_label, dtype=np.int64)
             test_indexs, val_indexs, train_indexs = self._split_data(labels[:index], adj)
             encoder = OneHotEncoder(sparse_output=False)
             numerical_classes = labels.reshape(-1, 1)
             labels = encoder.fit_transform(numerical_classes)
+
+            # index = -1
+            # test_indexs, val_indexs, train_indexs = self._split_data(feature[:index].shape[0])
+
             self._add_edges(test_indexs, val_indexs, train_indexs, adj, dataSet)
+
+
+            random_seed = 0
+            reduced_features, important_feats = reduce_node_features(feature.toarray(), labels, random_seed)
+
+            self.important_feats_id = important_feats
 
             setattr(self, dataSet + '_test', test_indexs)
             setattr(self, dataSet + '_val', val_indexs)
@@ -380,8 +389,11 @@ class DataCenter():
 
             setattr(self, dataSet + '_feats', feature[:index].toarray())
             setattr(self, dataSet + '_labels', labels)
-            setattr(self, dataSet + '_adj_lists', adj[:index, :index])
-            setattr(self, dataSet + '_edge_labels', edge_labels[:index, :index].toarray())
+            setattr(self, dataSet + '_adj_lists', adj[:index, :index].toarray())
+            setattr(self, dataSet + '_edge_labels', edge_labels[:index].toarray())
+
+
+
 
         if dataSet == "pubmed":
             dataset = PubmedGraphDataset()
@@ -492,6 +504,10 @@ class DataCenter():
 
 
     def _add_edges(self, test_indexs, val_indexs, train_indexs, adj, dataSet, ignore_val_test_edges = False, ignore_self_loop = True):
+
+        if scipy.sparse.issparse(adj):
+            adj = adj.todense()
+
         # Remove diagonal elements
         adj_tril = np.tril(adj, -1)
 

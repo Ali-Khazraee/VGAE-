@@ -67,7 +67,7 @@ parser.add_argument('--transductive', dest="transductive", default="True", type=
                     help="This flag is used if want to have transductive link prediction")
 parser.add_argument('--edge_base', dest="edge_base", default="True", type=str,
                     help="This flag is used if want to have edge base data splitting")
-parser.add_argument('-motif_obj', dest="motif_obj", default= False , help="adds motif_loss term to objective function")
+parser.add_argument('-motif_obj', dest="motif_obj", default = True , help="adds motif_loss term to objective function")
 parser.add_argument('-rp', dest="rule_prune",  default= True , help="Toggle rule pruning on or off")
 parser.add_argument('-rw', dest="rule_weight",  default= False , help="Toggle rule weighting on or off - If you want to use rule weighting, you need to turn on rule pruning first by setting it to True.")
 parser.add_argument('-dr', dest="devide_rec_adj",  default= False , help="This switch will divide reconstructed adjacency matrix by 1/n in every epoch")
@@ -511,7 +511,7 @@ if args.tuning == "False" and args.motif_count_eval == True:
     reconstructed_x_slice, reconstructed_labels_m = CMM.process_reconstructed_data(None, 
     [torch.tensor(org_adj, dtype=torch.float64)], torch.tensor(features[:,np.array(data_center.important_feats_id)]), np.array(data_center.important_feats_id), torch.tensor(labels)
 )
-    metric_ground_truth = CMM.iteration_function(reconstructed_x_slice , reconstructed_labels_m, mode = "ground-truth")
+    metric_observed = CMM.iteration_function(reconstructed_x_slice , reconstructed_labels_m, mode = "ground-truth")
 
 
     org_adj_sparse = sp.coo_matrix(org_adj)
@@ -545,7 +545,7 @@ if args.tuning == "False" and args.motif_count_eval == True:
     metric_predicted = CMM.iteration_function(reconstructed_x_slice , reconstructed_labels_m, mode = "metric-predicted")
 
 
-    closeness = torch.sqrt(F.mse_loss(torch.stack(metric_ground_truth), torch.stack(metric_predicted)))
+    closeness = torch.sqrt(F.mse_loss(torch.stack(metric_observed), torch.stack(metric_predicted)))
 
 
 

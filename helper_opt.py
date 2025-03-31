@@ -188,18 +188,44 @@ def train_model(data_center, features, args, device):
 
 
     
+    # if args.motif_obj == True:
+    #     CM = Motif_Count(args)
+    #     CM.setup_function()
+    #     reconstructed_x_slice, reconstructed_labels_m = CM.process_reconstructed_data(None, 
+    #     [adj_train], feat_train[:,np.array(data_center.important_feats_id)], np.array(data_center.important_feats_id), torch.tensor(labels_train)
+    # )
+    #     observed = CM.iteration_function(reconstructed_x_slice , reconstructed_labels_m, mode = "ground-truth")
+
+
+    # else:
+    #     CM = None
+    #     observed = None
+
+
+    # print(observed)
+
+
+
     if args.motif_obj == True:
         CM = Motif_Count(args)
         CM.setup_function()
         reconstructed_x_slice, reconstructed_labels_m = CM.process_reconstructed_data(None, 
-        [adj_train], feat_train[:,np.array(data_center.important_feats_id)], np.array(data_center.important_feats_id), torch.tensor(labels_train)
+        [original_adj], features[:,np.array([ 31, 199,  86,  18, 485])], np.array(data_center.important_feats_id), torch.tensor(labels_np)
     )
-        ground_truth = CM.iteration_function(reconstructed_x_slice , reconstructed_labels_m, mode = "ground-truth")
+        observed = CM.iteration_function(reconstructed_x_slice , reconstructed_labels_m, mode = "ground-truth")
 
 
     else:
         CM = None
-        ground_truth = None
+        observed = None
+
+
+    # print(observed)
+
+
+    print(data_center.important_feats_id)
+    exit()
+
 
 
     # if args.motif_obj == True:
@@ -208,13 +234,13 @@ def train_model(data_center, features, args, device):
     #     reconstructed_x_slice, reconstructed_labels_m = CM.process_reconstructed_data(None, 
     #     [original_adj], features[:,np.array([ 495,  774,  581,   19, 1263])], np.array([ 495,  774,  581,   19, 1263]), torch.tensor(labels_np)
     # )
-    #     ground_truth = CM.iteration_function(reconstructed_x_slice , reconstructed_labels_m, mode = "ground-truth")
+    #     observed = CM.iteration_function(reconstructed_x_slice , reconstructed_labels_m, mode = "ground-truth")
 
 
     # else:
-    #     ground_truth = None
+    #     observed = None
 
-    # print(ground_truth)
+    # print(observed)
     # exit()
 
     lambda_1 = 1
@@ -233,7 +259,7 @@ def train_model(data_center, features, args, device):
         optimizer_function = make_optimizer_wrapper(labels_train, labels_val, dataset, epoch_number, model, graph_dgl, graph_dgl_val, feat_train,
                     feat_val, targets, sampling_method, is_prior, loss_type, adj_train, adj_val, norm_feat,
                     pos_weight_feat, norm_feat_val, pos_weight_feat_val, num_nodes, num_nodes_val, pos_wight, norm,
-                    pos_wight_val, norm_val, optimizer, val_indx, trainId, args, ground_truth, CM)
+                    pos_wight_val, norm_val, optimizer, val_indx, trainId, args, observed, CM)
         optimizer_hp = BayesianOptimization(
             f=optimizer_function,
             pbounds=pbounds,
@@ -332,7 +358,7 @@ def train_model(data_center, features, args, device):
                                                                                                 feat_train, norm_feat,
                                                                                                 pos_weight_feat,
                                                                                                 std_z, m_z, num_nodes,
-                                                                                                pos_wight, norm, val_indx, train_indx, args, ground_truth, predicted)
+                                                                                                pos_wight, norm, val_indx, train_indx, args, observed, predicted)
 
         loss = reconstruction_loss + z_kl
 
@@ -355,7 +381,7 @@ def train_model(data_center, features, args, device):
 def optimize_weights(lambda_1, lambda_2, lambda_3,lambda_4, labels_train, labels_val, dataset, epoch_number, model, graph_dgl, graph_dgl_val, feat_train,
                 feat_val, targets, sampling_method, is_prior, loss_type, adj_train_org, adj_val_org, norm_feat,
                 pos_weight_feat, norm_feat_val, pos_weight_feat_val, num_nodes, num_nodes_val, pos_wight, norm,
-                pos_wight_val, norm_val, optimizer, val_indx, trainId, args, ground_truth, CM):
+                pos_wight_val, norm_val, optimizer, val_indx, trainId, args, observed, CM):
     for epoch in range(epoch_number):
         model.train()
         # forward propagation by using all nodes
@@ -394,7 +420,7 @@ def optimize_weights(lambda_1, lambda_2, lambda_3,lambda_4, labels_train, labels
             feat_train, norm_feat,
             pos_weight_feat,
             std_z, m_z, num_nodes,
-            pos_wight, norm, val_indx, trainId, args, ground_truth, predicted)
+            pos_wight, norm, val_indx, trainId, args, observed, predicted)
         loss = reconstruction_loss + z_kl
 
         # reconstructed_adj = torch.sigmoid(reconstructed_adj).detach().numpy()
@@ -436,10 +462,10 @@ def optimize_weights(lambda_1, lambda_2, lambda_3,lambda_4, labels_train, labels
 def make_optimizer_wrapper(labels_train, labels_val, dataset, epoch_number, model, graph_dgl, graph_dgl_val, feat_train,
                 feat_val, targets, sampling_method, is_prior, loss_type, adj_train_org, adj_val_org, norm_feat,
                 pos_weight_feat, norm_feat_val, pos_weight_feat_val, num_nodes, num_nodes_val, pos_wight, norm,
-                pos_wight_val, norm_val, optimizer, val_indx, trainId, args, ground_truth, CM):
+                pos_wight_val, norm_val, optimizer, val_indx, trainId, args, observed, CM):
     def optimize_weights_wrapper(lambda_1, lambda_2, lambda_3, lambda_4):
         return optimize_weights(lambda_1, lambda_2, lambda_3, lambda_4, labels_train, labels_val, dataset, epoch_number, model, graph_dgl, graph_dgl_val, feat_train,
                 feat_val, targets, sampling_method, is_prior, loss_type, adj_train_org, adj_val_org, norm_feat,
                 pos_weight_feat, norm_feat_val, pos_weight_feat_val, num_nodes, num_nodes_val, pos_wight, norm,
-                pos_wight_val, norm_val, optimizer, val_indx, trainId, args, ground_truth, CM)
+                pos_wight_val, norm_val, optimizer, val_indx, trainId, args, observed, CM)
     return optimize_weights_wrapper

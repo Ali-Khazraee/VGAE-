@@ -21,23 +21,23 @@ from sklearn.metrics import f1_score
 from utils import *
 
 # objective Function
-def  optimizer_VAE (lambda_1,lambda_2, lambda_3,lambda_4, true_labels, reconstructed_labels, loss_type, pred, reconstructed_feat, labels, x, norm_feat, pos_weight_feat,  std_z, mean_z, num_nodes, pos_weight, norm, indexes, trainID, args, ground_truth, predicted):
+def  optimizer_VAE (lambda_1,lambda_2, lambda_3,lambda_4, true_labels, reconstructed_labels, loss_type, pred, reconstructed_feat, labels, x, norm_feat, pos_weight_feat,  std_z, mean_z, num_nodes, pos_weight, norm, indexes, trainID, args, observed, predicted):
     
     
     if args.motif_obj == True: 
 
 
 
-        zero_indices = [i for i, t in enumerate(ground_truth) if torch.any(t == 0)]
+        zero_indices = [i for i, t in enumerate(observed) if torch.any(t == 0)]
 
-        filtered_ground_truth = [g for i, g in enumerate(ground_truth) if i not in zero_indices]
+        filtered_observed = [g for i, g in enumerate(observed) if i not in zero_indices]
         filtered_predicted = [p for i, p in enumerate(predicted) if i not in zero_indices]
 
-        normalized_ground_truth = [torch.ones_like(t) for t in filtered_ground_truth]
+        normalized_observed = [torch.ones_like(t) for t in filtered_observed]
 
-        # normalized_predicted = [p / g for p, g in zip(filtered_predicted, filtered_ground_truth)]
+        # normalized_predicted = [p / g for p, g in zip(filtered_predicted, filtered_observed)]
 
-        normalized_predicted = [torch.abs((torch.log(p / g))) for p, g in zip(filtered_predicted, filtered_ground_truth)]
+        normalized_predicted = [torch.abs((torch.log(p / g))) for p, g in zip(filtered_predicted, filtered_observed)]
         
         motif_loss = (((torch.sum(torch.stack(normalized_predicted))/len((normalized_predicted)))))
     else: 

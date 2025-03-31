@@ -4,6 +4,8 @@ from pymysql import connect
 from pandas import DataFrame
 from itertools import permutations
 from math import log
+import pickle
+
 
 class Motif_Count:
 # Motif_Count class for counting motifs in graphs based on given rules
@@ -41,31 +43,74 @@ class Motif_Count:
         
         # self.setup_function()
 
+
+
+
+    def load_setup_variables(self, file_path):
+        """
+        Load all important variables from a .pkl file.
+        
+        Parameters:
+            file_path (str): Path to the .pkl file to load the variables.
+        """
+        with open(file_path, "rb") as f:
+            important_variables = pickle.load(f)
+
+        # Assign loaded variables to class attributes
+        self.entities = important_variables["entities"]
+        self.relations = important_variables["relations"]
+        self.keys = important_variables["keys"]
+        self.matrices = important_variables["matrices"]
+        self.rules = important_variables["rules"]
+        self.indices = important_variables["indices"]
+        self.attributes = important_variables["attributes"]
+        self.base_indices = important_variables["base_indices"]
+        self.mask_indices = important_variables["mask_indices"]
+        self.sort_indices = important_variables["sort_indices"]
+        self.stack_indices = important_variables["stack_indices"]
+        self.values = important_variables["values"]
+        self.prunes = important_variables["prunes"]
+        self.functors = important_variables["functors"]
+        self.variables = important_variables["variables"]
+        self.nodes = important_variables["nodes"]
+        self.states = important_variables["states"]
+        self.masks = important_variables["masks"]
+        self.multiples = important_variables["multiples"]
+
+
+
+
+
+
+
 # Main setup function to initialize data structures and process rules
     def setup_function(self):
         """
         Main setup function to initialize data from SQL, create indices,
         mask matrices, and process rules and values.
         """
-        # Fetch data from SQL
-        self.fetch_data_from_sql()
+        # # Fetch data from SQL
+        # self.fetch_data_from_sql()
 
-        # Create indices for quick lookup
-        self.create_indices()
+        # # Create indices for quick lookup
+        # self.create_indices()
 
-        # Create mask matrices based on relations
-        self.create_mask_matrices()
+        # # Create mask matrices based on relations
+        # self.create_mask_matrices()
 
-        # Process rules and values for motif counting
-        self.process_rules()
+        # # Process rules and values for motif counting
+        # self.process_rules()
 
-        # Close database connections
-        self.cursor.close()
-        self.connection.close()
-        self.cursor_setup.close()
-        self.connection_setup.close()
-        self.cursor_bn.close()
-        self.connection_bn.close()
+        # # Close database connections
+        # self.cursor.close()
+        # self.connection.close()
+        # self.cursor_setup.close()
+        # self.connection_setup.close()
+        # self.cursor_bn.close()
+        # self.connection_bn.close()
+
+
+        self.load_setup_variables('acm_no_prune.pkl')
 
 
 # Fetch data from the SQL database and establish connections
@@ -79,7 +124,8 @@ class Motif_Count:
             "citeseer": "citeseer",
             "imdb-multi": "imdb",
             "acm-multi": "acm-multi",
-            "CiteSeer_dgl":"citeseer"
+            "CiteSeer_dgl":"citeseer", 
+            "IMDB":"imdb"
         }
         self.db_name = database_name[self.args.dataSet]
         self.db = self.db_name
@@ -472,6 +518,8 @@ class Motif_Count:
         counter_c1 = 0
 
         for table in range(len(self.rules)):
+            print(self.rules[table])
+
             indexx = -1
             for table_row in self.values[table]:
                 indexx += 1
@@ -499,6 +547,9 @@ class Motif_Count:
                 else:
                     motif_list.append(torch.sum(result))
 
+                print(torch.sum(result))
+
+
                 # Clean up to free memory
                 del unmasked_matrices, masked_matrices, sorted_matrices, stacked_matrices, result
 
@@ -519,7 +570,7 @@ class Motif_Count:
             variable = '0'
             functor_value_dict_key = (table_functor_value, functor, variable, tuple_mask_info)
             
-            if mode == 'metric_ground_truth':
+            if mode == 'metric_observed':
                 if self.states[table][column] != 1:
                     # Use cached matrix if available
                     if functor_value_dict.get(functor_value_dict_key) is not None:
@@ -535,7 +586,7 @@ class Motif_Count:
                      functor, table_functor_value, self.nodes[table][column], reconstructed_x_slice, reconstructed_labels, mode
                 )
                 unmasked_matrices.append(matrix)
-                if mode == 'metric_ground_truth':
+                if mode == 'metric_observed':
                     functor_value_dict[functor_value_dict_key] = matrix
             elif state == 1:
                 # Compute matrices for state 1
@@ -549,7 +600,7 @@ class Motif_Count:
                 # Use the relation matrix for state 2
                 matrix = self.compute_state_two(functor, table_functor_value)
                 unmasked_matrices.append(matrix)
-                if mode == 'metric_ground_truth':
+                if mode == 'metric_observed':
                     functor_value_dict[functor_value_dict_key] = matrix
             elif state == 3:
                 # Compute matrix for attribute relations in state 3
@@ -557,7 +608,7 @@ class Motif_Count:
                     functor, table_functor_value
                 )
                 unmasked_matrices.append(matrix)
-                if mode == 'metric_ground_truth':
+                if mode == 'metric_observed':
                     functor_value_dict[functor_value_dict_key] = matrix
         return unmasked_matrices, functor_value_dict, counter, counter_c1
 
@@ -567,7 +618,7 @@ class Motif_Count:
         """
         Compute matrix for state 0, which involves unary predicates without relations.
         """
-        if mode == 'metric_ground_truth':
+        if mode == 'metric_observed':
             # Create a column vector indicating entities matching the functor value
             primary_key = self.keys[functor_address]
             matrix = torch.zeros((len(self.entities[functor_address].index), 1), device=self.device)
@@ -612,7 +663,7 @@ class Motif_Count:
         for mask_info in masks_list:
             tuple_mask_info = tuple(mask_info)
             functor_value_dict_key = (table_functor_value, functor, variable, tuple_mask_info)
-            if mode == 'metric_ground_truth':
+            if mode == 'metric_observed':
                 # Use cached matrix if available
                 if functor_value_dict.get(functor_value_dict_key) is not None:
                     matrix = functor_value_dict[functor_value_dict_key]
@@ -635,7 +686,7 @@ class Motif_Count:
                         else:
                             matrix[0, index] = 1
                 matrices_list.append(matrix)
-                if mode == 'metric_ground_truth':
+                if mode == 'metric_observed':
                     functor_value_dict[functor_value_dict_key] = matrix
             else:
                 # Use reconstructed data to create the matrix
