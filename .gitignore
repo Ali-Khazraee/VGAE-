@@ -10,3 +10,9 @@ data.zip
 imdb_no_prune.pkl
 imdb_no_prune.zip
 test.py
+GeneratedSamples/
+__pycache__/rnn_mmd.cpython-39.pyc
+__pycache__/stat_rnn.cpython-39.pyc
+count_distance/
+false___count_distance/
+runs/

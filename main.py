@@ -34,9 +34,9 @@ warnings.simplefilter('ignore')
 
 parser = argparse.ArgumentParser(description='Inductive')
 
-parser.add_argument('--e', type=int, dest="epoch_number", default=100, help="Number of Epochs")
-parser.add_argument('--dataSet', type=str, default="ACM")
-parser.add_argument('--loss_type', dest="loss_type", default="1", help="type of combination between loss_A and loss_F")
+parser.add_argument('--e', type=int, dest="epoch_number", default=10, help="Number of Epochs")
+parser.add_argument('--dataSet', type=str, default="Cora_dgl")
+parser.add_argument('--loss_type', dest="loss_type", default="4", help="type of combination between loss_A and loss_F")
 parser.add_argument('--sampling_method', dest="sampling_method", default="deterministic", help="This var shows sampling method it could be: monte, importance_sampling, deterministic")
 parser.add_argument('--method', dest="method", default="single", help="This var shows method it could be: multi, single")
 parser.add_argument('--iterative', dest="iterative", default="False", type=str, help="This flag is used if want to have iterative link prediction")
@@ -75,7 +75,7 @@ parser.add_argument('-graph_type', dest="graph_type", default="homogeneous", cho
 parser.add_argument('--graph_realism', type=bool, default=False,
                     help="Set to True to enable graph realism evaluation, or False to disable it.")
 
-parser.add_argument('--motif_count_eval', type=bool, default=False,
+parser.add_argument('--motif_count_eval', type=bool, default=True,
                     help="Set to True to enable motif_count evaluation, or False to disable it.")
 
 
@@ -489,43 +489,115 @@ with open('./results.csv', 'a', newline="\n") as f:
 
 
 
-# evaluation on graph realism and motif count
 
-# if args.tuning == "False" and args.graph_realism == True:
-#     inductive_model.eval()
-#     dir = "GeneratedSamples/"+str(args.dataSet)
-#     setting="Rule_reg" if args.use_motif else "Vanila"
-#     dir+=setting+"/"
-#     SaveSamples(inductive_model, graph_dgl, features,adj_train, features[:,important_feat_ids].float(), dir,setting)
-#     gmm_metrics_dir = "GMM-metrics"  # Relative or absolute path
-#     script_name = "RuleEval.py"
-#     subprocess.run(["python", os.path.join(gmm_metrics_dir, script_name)], check=True)
+original_adj_full= torch.FloatTensor(getattr(data_center, ds+'_adj_lists')).to(device)
+node_label_full= torch.FloatTensor(getattr(data_center, ds+'_labels')).to(device)
+
+val_indx = getattr(data_center, ds + '_val_edge_idx')
+train_indx = getattr(data_center, ds + '_train_edge_idx')
 
 
+subgraph_size = original_adj_full.shape[0]
+elemnt = min(original_adj_full.shape[0], subgraph_size)
+indexes = list(range(original_adj_full.shape[0]))
+np.random.shuffle(indexes)
+indexes = indexes[:elemnt]
+original_adj = original_adj_full[indexes, :]
+original_adj = original_adj[:, indexes]
 
-if args.tuning == "False" and args.motif_count_eval == True:
+node_label = [np.array(node_label_full[i], dtype=np.float16) for i in indexes]
+features = features[indexes]
+number_of_classes = len(node_label_full[0])
 
+
+trainId = getattr(data_center, ds + '_train')
+testId = getattr(data_center, ds + '_test')
+validId = getattr(data_center, ds + '_val')
+
+
+
+adj_train = original_adj.cpu().detach().numpy()[trainId, :][:, trainId]
+adj_val = original_adj.cpu().detach().numpy()[validId, :][:, validId]
+
+feat_np = features.cpu().data.numpy()
+feat_train = feat_np[trainId, :]
+feat_val = feat_np[validId, :]
+
+labels_np = np.array(node_label, dtype=np.float16)
+labels_train = labels_np[trainId]
+labels_val = labels_np[validId]
+
+print('Finish spliting dataset to train and test. ')
+
+
+adj_train = sp.csr_matrix(adj_train)
+adj_val = sp.csr_matrix(adj_val)
+
+
+
+
+graph_dgl = dgl.from_scipy(adj_train)
+graph_dgl.add_edges(graph_dgl.nodes(), graph_dgl.nodes()) 
+num_nodes = graph_dgl.number_of_dst_nodes()
+adj_train = torch.tensor(adj_train.todense())  # use sparse man
+adj_train = adj_train + sp.eye(adj_train.shape[0]).todense()
+
+graph_dgl_val = dgl.from_scipy(adj_val)
+graph_dgl_val.add_edges(graph_dgl_val.nodes(), graph_dgl_val.nodes())  # the library does not add self-loops
+num_nodes_val = graph_dgl.number_of_dst_nodes()
+adj_val = torch.tensor(adj_val.todense())  # use sparse man
+adj_val = adj_val + sp.eye(adj_val.shape[0]).todense()
+
+if (type(feat_train) == np.ndarray):
+    feat_train = torch.tensor(feat_train, dtype=torch.float32)
+    feat_val = torch.tensor(feat_val, dtype=torch.float32)
+
+
+n_target = []
+is_prior = False
+
+
+
+
+
+# # evaluation on graph realism and motif count
+
+if args.graph_realism == True:
+    inductive_model.eval()
+    dir = "GeneratedSamples/"+str(args.dataSet)
+    setting="Rule_reg" if args.motif_obj else "Vanila"
+    dir+=setting+"/"
+    SaveSamples(inductive_model, graph_dgl, feat_train, adj_train, feat_train[:,data_center.important_feats_id].float(), dir, labels_train, n_target, sampling_method, is_prior)
+    # gmm_metrics_dir = "GMM-metrics"  # Relative or absolute path
+    # script_name = "RuleEval.py"
+    # subprocess.run(["python", os.path.join(gmm_metrics_dir, script_name)], check=True)
+
+
+
+if args.motif_count_eval == True:
+
+    # org_adj = org_adj + np.eye(org_adj.shape[0])
 
     CMM = Motif_Count(args)
     CMM.setup_function()
     reconstructed_x_slice, reconstructed_labels_m = CMM.process_reconstructed_data(None, 
-    [torch.tensor(org_adj, dtype=torch.float64)], torch.tensor(features[:,np.array(data_center.important_feats_id)]), np.array(data_center.important_feats_id), torch.tensor(labels)
+    [torch.tensor(adj_train, dtype=torch.float64)], torch.tensor(feat_train[:,np.array(data_center.important_feats_id)]), np.array(data_center.important_feats_id), torch.tensor(labels_train)
 )
-    metric_observed = CMM.iteration_function(reconstructed_x_slice , reconstructed_labels_m, mode = "ground-truth")
+    metric_ground_truth = CMM.iteration_function(reconstructed_x_slice , reconstructed_labels_m, mode = "ground-truth")
 
 
-    org_adj_sparse = sp.coo_matrix(org_adj)
+    org_adj_sparse = sp.coo_matrix(adj_train)
     metric_graph_dgl = dgl.from_scipy(org_adj_sparse)
-
 
     with torch.no_grad():  
 
-        std_z, m_z, z, reconstructed_adj, reconstructed_feat, re_labels = inductive_model(metric_graph_dgl, features, labels,
+        std_z, m_z, z, reconstructed_adj, reconstructed_feat, re_labels = inductive_model(metric_graph_dgl, feat_train, labels_train,
                                                                                 targets, sampling_method,
                                                                                 args.is_prior, train=False)
 
         epsilon = torch.randn_like(std_z) 
-        sampled_z = m_z + epsilon * std_z  
+        # print(epsilon)
+        sampled_z = m_z + epsilon * std_z 
 
         sampled_adj = inductive_model.generator(sampled_z)
 
@@ -545,8 +617,24 @@ if args.tuning == "False" and args.motif_count_eval == True:
     metric_predicted = CMM.iteration_function(reconstructed_x_slice , reconstructed_labels_m, mode = "metric-predicted")
 
 
-    closeness = torch.sqrt(F.mse_loss(torch.stack(metric_observed), torch.stack(metric_predicted)))
+    closeness = torch.sqrt(F.mse_loss(torch.stack(metric_ground_truth), torch.stack(metric_predicted)))
 
 
 
     print('closensee = ', closeness)
+
+
+
+    os.makedirs('count_distance', exist_ok=True)
+    ds_dir = os.path.join('count_distance', ds + "_" + str(args.motif_obj) )
+    os.makedirs(ds_dir, exist_ok=True)
+
+    data = {
+        'metric_predicted': [t.item() for t in metric_predicted],
+        'ground_truth': [t.item() for t in metric_ground_truth],
+        'closeness': closeness.item()
+    }
+
+    json_path = os.path.join(ds_dir, 'variables.json')
+    with open(json_path, 'w') as f:
+        json.dump(data, f, indent=4)  

@@ -345,44 +345,213 @@ def orbit_stats_all(graph_ref_list, graph_pred_list):
     # print('-------------------------')
     return mmd_dist
 
+import sys
+import traceback
+import networkx as nx
 
-# This function takes two list of networkx2 objects and compare their mmd for preddefined statistics
 def mmd_eval(generated_graph_list, original_graph_list, diam=False):
     try:
+        print("Starting mmd_eval with:")
+        print(f"  - {len(generated_graph_list)} generated graphs")
+        print(f"  - {len(original_graph_list)} original graphs")
+        
+        # Check graphs before filtering
+        for i, G in enumerate(generated_graph_list):
+            print(f"Generated graph {i}: nodes={G.number_of_nodes()}, edges={G.number_of_edges()}, selfloops={len(list(nx.selfloop_edges(G)))}")
+        
+        # Filter empty graphs
         generated_graph_list = [G for G in generated_graph_list if not G.number_of_nodes() == 0]
-        for G in generated_graph_list:
-            G.remove_edges_from(nx.selfloop_edges(G))
-
-        for G in original_graph_list:
-            G.remove_edges_from(nx.selfloop_edges(G))
-        # removing emty graph
+        print(f"After filtering empty graphs: {len(generated_graph_list)} generated graphs remain")
+        
+        # Remove self-loops with verification
+        for i, G in enumerate(generated_graph_list):
+            self_loops = list(nx.selfloop_edges(G))
+            print(f"Removing {len(self_loops)} self-loops from generated graph {i}")
+            G.remove_edges_from(self_loops)
+            
+        for i, G in enumerate(original_graph_list):
+            self_loops = list(nx.selfloop_edges(G))
+            print(f"Removing {len(self_loops)} self-loops from original graph {i}")
+            G.remove_edges_from(self_loops)
+        
+        # Additional filtering with verification
         tmp_generated_graph_list = []
-        for G in generated_graph_list:
+        for i, G in enumerate(generated_graph_list):
             if G.number_of_nodes() > 0:
                 tmp_generated_graph_list.append(G)
+            else:
+                print(f"Removing empty generated graph {i}")
+        
         generated_graph_list = tmp_generated_graph_list
-        mmd_degree = degree_stats(original_graph_list, generated_graph_list)
+        print(f"Final graph count: {len(generated_graph_list)} generated, {len(original_graph_list)} original")
+        
+        # Check for potential issues in graphs
+        for i, G in enumerate(generated_graph_list):
+            zero_degree_nodes = [n for n, d in G.degree() if d == 0]
+            if zero_degree_nodes:
+                print(f"WARNING: Generated graph {i} has {len(zero_degree_nodes)} nodes with zero degree")
+            if not nx.is_connected(G):
+                print(f"WARNING: Generated graph {i} is not connected")
+                
+        for i, G in enumerate(original_graph_list):
+            zero_degree_nodes = [n for n, d in G.degree() if d == 0]
+            if zero_degree_nodes:
+                print(f"WARNING: Original graph {i} has {len(zero_degree_nodes)} nodes with zero degree")
+            if not nx.is_connected(G):
+                print(f"WARNING: Original graph {i} is not connected")
+        
+        # Start metric calculations with detailed error handling
+        print("\nCalculating metrics:")
+        
+        # Degree stats
+        print("Calculating degree stats...")
         try:
-            mmd_4orbits = orbit_stats_all(original_graph_list, generated_graph_list)
-        except:
-            print("Unexpected error:", sys.exc_info()[0])
+            mmd_degree = degree_stats(original_graph_list, generated_graph_list)
+            print(f"  - Degree MMD: {mmd_degree}")
+        except Exception as e:
+            print(f"ERROR in degree_stats: {str(e)}")
+            traceback.print_exc()
+            mmd_degree = "ERROR"
+        
+        # Orbit stats with detailed sample tracking
+        print("Calculating orbit stats...")
+        try:
+            # Wrap the orbit_stats_all call to inspect samples before MMD computation
+            # This requires a modified version of orbit_stats_all that returns samples
+            # If you can't modify orbit_stats_all, use the next approach below
+            
+            def wrapped_orbit_stats_all(orig_graphs, gen_graphs):
+                """Wrapper to intercept and debug orbit samples"""
+                # Get orbit counts for both sets of graphs (implementation depends on your code)
+                orig_counts = get_graph_orbits(orig_graphs)
+                gen_counts = get_graph_orbits(gen_graphs)
+                
+                print(f"Original graphs orbit sample count: {len(orig_counts)}")
+                print(f"Generated graphs orbit sample count: {len(gen_counts)}")
+                
+                if len(orig_counts) == 0:
+                    print("WARNING: Original graphs produced ZERO orbit samples!")
+                    print("Graph properties of original graphs:")
+                    for i, G in enumerate(orig_graphs):
+                        print(f"  Graph {i}: nodes={G.number_of_nodes()}, edges={G.number_of_edges()}, connected={nx.is_connected(G)}")
+                
+                if len(gen_counts) == 0:
+                    print("WARNING: Generated graphs produced ZERO orbit samples!")
+                    print("Graph properties of generated graphs:")
+                    for i, G in enumerate(gen_graphs):
+                        print(f"  Graph {i}: nodes={G.number_of_nodes()}, edges={G.number_of_edges()}, connected={nx.is_connected(G)}")
+                
+                # If either set is empty, we know we'll get division by zero
+                if len(orig_counts) == 0 or len(gen_counts) == 0:
+                    raise ValueError(f"Empty orbit samples detected: orig={len(orig_counts)}, gen={len(gen_counts)}")
+                
+                # Continue with normal orbit_stats_all calculation
+                return orbit_stats_all(orig_graphs, gen_graphs)
+            
+            # Try to use the wrapper function if compatible with your code
+            try:
+                mmd_4orbits = wrapped_orbit_stats_all(original_graph_list, generated_graph_list)
+            except NameError:
+                # If get_graph_orbits isn't defined, fall back to inspecting MMD directly
+                print("Wrapper not compatible, attempting direct MMD inspection...")
+                
+                # Modify your rnn_mmd.py file's compute_mmd function to check for zero length
+                # If you can't modify that file, patch it at runtime
+                original_compute_mmd = sys.modules.get('rnn_mmd', None)
+                if original_compute_mmd and hasattr(original_compute_mmd, 'compute_mmd'):
+                    original_mmd_fn = original_compute_mmd.compute_mmd
+                    
+                    def patched_compute_mmd(samples1, samples2, kernel, *args, **kwargs):
+                        print(f"MMD samples: len(samples1)={len(samples1)}, len(samples2)={len(samples2)}")
+                        if len(samples1) == 0:
+                            print("WARNING: First sample set (original graphs) is EMPTY!")
+                        if len(samples2) == 0:
+                            print("WARNING: Second sample set (generated graphs) is EMPTY!")
+                        
+                        if len(samples1) == 0 or len(samples2) == 0:
+                            return -1  # Avoid division by zero
+                        return original_mmd_fn(samples1, samples2, kernel, *args, **kwargs)
+                    
+                    # Apply the patch
+                    original_compute_mmd.compute_mmd = patched_compute_mmd
+                
+                # Try the regular call with our patch applied
+                mmd_4orbits = orbit_stats_all(original_graph_list, generated_graph_list)
+            
+            print(f"  - Orbit MMD: {mmd_4orbits}")
+        except ZeroDivisionError as e:
+            print(f"ZERO DIVISION ERROR in orbit_stats_all: {str(e)}")
+            print(f"Location: {traceback.format_exc()}")
+            
+            # Try to inspect mmd.py and orbit_stats functions directly
+            print("\nAttempting to diagnose orbit calculation issue:")
+            try:
+                import inspect
+                
+                # Try to get source of the relevant functions
+                if 'orbit_stats_all' in globals():
+                    print("orbit_stats_all function source:")
+                    print(inspect.getsource(orbit_stats_all))
+                
+                if 'mmd' in sys.modules:
+                    mmd_module = sys.modules['mmd']
+                    if hasattr(mmd_module, 'compute_mmd'):
+                        print("compute_mmd function source:")
+                        print(inspect.getsource(mmd_module.compute_mmd))
+            except Exception as inspect_error:
+                print(f"Could not inspect source: {inspect_error}")
+            
             mmd_4orbits = -1
-        mmd_clustering = clustering_stats(original_graph_list, generated_graph_list)
-        # mmd_sparsity, degree1, degree2 = sparsity_stats_all(original_graph_list, generated_graph_list)
-        mmd_spectral = spectral_stats(original_graph_list, generated_graph_list)
+        except Exception as e:
+            print(f"ERROR in orbit_stats_all: {str(e)}")
+            traceback.print_exc()
+            mmd_4orbits = -1
+        
+        # Clustering stats
+        print("Calculating clustering stats...")
+        try:
+            mmd_clustering = clustering_stats(original_graph_list, generated_graph_list)
+            print(f"  - Clustering MMD: {mmd_clustering}")
+        except Exception as e:
+            print(f"ERROR in clustering_stats: {str(e)}")
+            traceback.print_exc()
+            mmd_clustering = "ERROR"
+        
+        # Spectral stats
+        print("Calculating spectral stats...")
+        try:
+            mmd_spectral = spectral_stats(original_graph_list, generated_graph_list)
+            print(f"  - Spectral MMD: {mmd_spectral}")
+        except Exception as e:
+            print(f"ERROR in spectral_stats: {str(e)}")
+            traceback.print_exc()
+            mmd_spectral = "ERROR"
+        
+        # Diameter stats
         if diam:
-            mmd_diam = MMD_diam(original_graph_list, generated_graph_list)
+            print("Calculating diameter stats...")
+            try:
+                mmd_diam = MMD_diam(original_graph_list, generated_graph_list)
+                print(f"  - Diameter MMD: {mmd_diam}")
+            except Exception as e:
+                print(f"ERROR in MMD_diam: {str(e)}")
+                traceback.print_exc()
+                mmd_diam = "ERROR"
         else:
             mmd_diam = "_"
-        # mmd_tri = MMD_triangles(original_graph_list, generated_graph_list)
+            print("Skipping diameter calculation")
 
-        print('degree', mmd_degree, 'clustering', mmd_clustering, 'orbits', mmd_4orbits, "Spec:", mmd_spectral,
-              " diameter:", mmd_diam)
+        print('\nFinal results:')
+        print('degree', mmd_degree, 'clustering', mmd_clustering, 'orbits', mmd_4orbits, 
+              "Spec:", mmd_spectral, "diameter:", mmd_diam)
+              
         return (' degree: ' + str(mmd_degree) + ' clustering: ' + str(mmd_clustering) + ' orbits: ' + str(
             mmd_4orbits) + " Spec: " + str(mmd_spectral) + " diameter: " + str(mmd_diam))
-    except Exception:
-        print(Exception)
-
+            
+    except Exception as e:
+        print(f"CRITICAL ERROR in mmd_eval: {str(e)}")
+        traceback.print_exc()
+        return f"Error: {str(e)}"
 
 def load_graphs(graph_pkl):
     import pickle5 as cp
@@ -529,7 +698,7 @@ def evl_all_in_dir(dir, refrence_file, generated_file):
     # save the csv file in the dir
 
 def to_nx(G):
-    graph = nx.from_numpy_matrix(G)
+    graph = nx.from_numpy_array(G)
     graph.remove_edges_from(nx.selfloop_edges(graph))
     graph.remove_nodes_from(list(nx.isolates(graph)))
     Gcc = sorted(nx.connected_components(graph), key=len, reverse=True)

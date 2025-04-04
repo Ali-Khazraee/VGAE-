@@ -305,10 +305,17 @@ class DataCenter():
             with open("IMDB/node_features.pkl", 'rb') as f:
                 obj.append(pkl.load(f))
             feature = sp.csr_matrix(obj[0])
-            feature = sp.csr_matrix(obj[0])
 
             index = -1
             labels = np.asarray(node_label, dtype=np.int64)
+
+
+
+            random_seed = 0
+            reduced_features, important_feats = reduce_node_features(feature.toarray(), labels, random_seed)
+
+
+
             test_indexs, val_indexs, train_indexs = self._split_data(labels[:index], adj)
             encoder = OneHotEncoder(sparse_output=False)
             numerical_classes = labels.reshape(-1, 1)
@@ -320,8 +327,6 @@ class DataCenter():
             self._add_edges(test_indexs, val_indexs, train_indexs, adj, dataSet)
 
 
-            random_seed = 0
-            reduced_features, important_feats = reduce_node_features(feature.toarray(), labels, random_seed)
 
             self.important_feats_id = important_feats
 
@@ -363,10 +368,15 @@ class DataCenter():
             with open("ACM/node_features.pkl", 'rb') as f:
                 obj.append(pkl.load(f))
             feature = sp.csr_matrix(obj[0])
-            feature = sp.csr_matrix(obj[0])
 
             index = -1
             labels = np.asarray(node_label, dtype=np.int64)
+
+
+            random_seed = 0
+            reduced_features, important_feats = reduce_node_features(feature.toarray(), labels, random_seed)
+
+
             test_indexs, val_indexs, train_indexs = self._split_data(labels[:index], adj)
             encoder = OneHotEncoder(sparse_output=False)
             numerical_classes = labels.reshape(-1, 1)
@@ -378,8 +388,7 @@ class DataCenter():
             self._add_edges(test_indexs, val_indexs, train_indexs, adj, dataSet)
 
 
-            random_seed = 0
-            reduced_features, important_feats = reduce_node_features(feature.toarray(), labels, random_seed)
+
 
             self.important_feats_id = important_feats
 

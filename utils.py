@@ -20,7 +20,7 @@ from sklearn.metrics import f1_score
 from sklearn.ensemble import ExtraTreesClassifier
 import pandas as pd
 import pickle
-# import stat_rnn
+import stat_rnn
 
 
 
@@ -242,61 +242,74 @@ def reduce_node_features(x, y, random_seed, n_components=5):
 
 
 
-# def descrizer(graph, threshold=.5):
-#     """
 
-#     :param graph: numpy array
-#     :return: discretize numpy array using the threshold
-#     """
-#     graph[graph >= 0.5] = 1
-#     graph[graph < 0.5] = 0
-#     return graph
+def SaveSamples(model, computation_graph, in_features, ref_graph,ref_feature, dir, labels_train, n_target, sampling_method, is_prior):
+    generate_graph = generator(model, computation_graph, in_features, labels_train, n_target, sampling_method, is_prior,  num_sam = 10)
+    refrence_graph = []
+    ref_graph = ref_graph.unsqueeze(0)
+    refrence_graph.append([Hemogenizer(ref_graph.detach().numpy()), ref_feature.detach().numpy()])
 
 
-# def Hemogenizer(adj_matrix):
-#     """
+    if not os.path.exists(dir):
+        os.makedirs(dir)
 
-#     :param adj_matrix: given the numpy tesnsor, homegenize it into matix
-#     :return:
-#     """
-#     return adj_matrix.sum(0)
+    # np.save(dir + setting+'_generatedGraphs_.npy', generate_graph, allow_pickle=True)
+    # np.save(dir + setting+'refGraphs.npy', refrence_graph, allow_pickle=True)
+    with open(dir + 'generatedGraphs.npy', 'wb') as file:
+        pickle.dump(generate_graph, file)
 
+    with open(dir + 'refGraphs.npy', 'wb') as file:
+        pickle.dump(refrence_graph, file)
 
-# def generator(model, computation_graph, in_features,  num_sam = 10):
-
-#     """use the sample and generate  attiributed graph"""
-
-
-
-#     generate_graph = []
-#     for sample_i in range(num_sam):
-#         std_z, m_z, z, reconstructed_adj_logit, reconstructed_x, reconstructed_labels = model(computation_graph, in_features)
-#         reconstructed_adjacency = torch.sigmoid(reconstructed_adj_logit)
-#         reconstructed_x_prob = torch.sigmoid(reconstructed_x)
-#         reconstructed_labels_prob = torch.sigmoid(reconstructed_labels)
-#         graph =reconstructed_adjacency.detach().numpy()
-#         graph = descrizer(graph)
-#         graph = Hemogenizer(graph)
-#         generate_graph.append([graph, reconstructed_x_prob.detach().numpy()])
-#     return generate_graph
-
-# def SaveSamples(model, computation_graph, in_features, ref_graph,ref_feature, dir,  num_sam = 10):
-#     generate_graph = generator(model, computation_graph, in_features,  num_sam = 10)
-#     refrence_graph = []
-
-#     refrence_graph.append([Hemogenizer(ref_graph.detach().numpy()), ref_feature.detach().numpy()])
+    # for i, G in enumerate(generate_graph):
+    #     print(f"generate_graph[{i}][0] shape:", G[0].shape)
 
 
-#     if not os.path.exists(dir):
-#         os.makedirs(dir)
+    # print("\nStarting MMD eval:")
+    # print("Length of generate_graph:", len(generate_graph))
+    # print("Length of refrence_graph:", len(refrence_graph))
+    
+    # Add these prints just before the list comprehension:
+    # print("\nFirst elements before processing:")
+    # print("generate_graph[0][0] shape:", generate_graph[0][0].shape)
+    # print("refrence_graph[0][0] shape:", refrence_graph[0][0].shape)
 
-#     # np.save(dir + setting+'_generatedGraphs_.npy', generate_graph, allow_pickle=True)
-#     # np.save(dir + setting+'refGraphs.npy', refrence_graph, allow_pickle=True)
-#     with open(dir + 'generatedGraphs.npy', 'wb') as file:
-#         pickle.dump(generate_graph, file)
 
-#     with open(dir + 'refGraphs.npy', 'wb') as file:
-#         pickle.dump(refrence_graph, file)
+    stat_rnn.mmd_eval([stat_rnn.to_nx(G[0]) for G in generate_graph], [stat_rnn.to_nx(G[0]) for G in refrence_graph], True)
 
-#     stat_rnn.mmd_eval([stat_rnn.to_nx(G[0]) for G in generate_graph], [stat_rnn.to_nx(G[0]) for G in refrence_graph], True)
 
+
+
+def Hemogenizer(adj_matrix):
+        return adj_matrix.sum(0)
+
+def generator(model, computation_graph, in_features, labels_train, n_target, sampling_method, is_prior, num_sam = 10):
+
+    """use the sample and generate  attiributed graph"""
+
+
+
+    generate_graph = []
+    for sample_i in range(num_sam):
+        std_z, m_z, z, reconstructed_adj_logit, reconstructed_x, reconstructed_labels = model(computation_graph, in_features, labels_train, n_target, sampling_method, is_prior, train=False)
+        reconstructed_adjacency = torch.sigmoid(reconstructed_adj_logit)
+        reconstructed_adjacency = reconstructed_adjacency.unsqueeze(0)
+        reconstructed_x_prob = torch.sigmoid(reconstructed_x)
+        reconstructed_labels_prob = torch.sigmoid(reconstructed_labels)
+        graph =reconstructed_adjacency.detach().numpy()
+        graph = descrizer(graph)
+        graph = Hemogenizer(graph)
+        generate_graph.append([graph, reconstructed_x_prob.detach().numpy()])
+    return generate_graph
+
+
+
+def descrizer(graph, threshold=.5):
+    """
+
+    :param graph: numpy array
+    :return: discretize numpy array using the threshold
+    """
+    graph[graph >= 0.5] = 1
+    graph[graph < 0.5] = 0
+    return graph

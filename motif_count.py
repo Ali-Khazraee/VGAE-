@@ -89,28 +89,28 @@ class Motif_Count:
         Main setup function to initialize data from SQL, create indices,
         mask matrices, and process rules and values.
         """
-        # # Fetch data from SQL
-        # self.fetch_data_from_sql()
+        # Fetch data from SQL
+        self.fetch_data_from_sql()
 
-        # # Create indices for quick lookup
-        # self.create_indices()
+        # Create indices for quick lookup
+        self.create_indices()
 
-        # # Create mask matrices based on relations
-        # self.create_mask_matrices()
+        # Create mask matrices based on relations
+        self.create_mask_matrices()
 
-        # # Process rules and values for motif counting
-        # self.process_rules()
+        # Process rules and values for motif counting
+        self.process_rules()
 
-        # # Close database connections
-        # self.cursor.close()
-        # self.connection.close()
-        # self.cursor_setup.close()
-        # self.connection_setup.close()
-        # self.cursor_bn.close()
-        # self.connection_bn.close()
+        # Close database connections
+        self.cursor.close()
+        self.connection.close()
+        self.cursor_setup.close()
+        self.connection_setup.close()
+        self.cursor_bn.close()
+        self.connection_bn.close()
 
 
-        self.load_setup_variables('acm_no_prune.pkl')
+        # self.load_setup_variables('acm_no_prune.pkl')
 
 
 # Fetch data from the SQL database and establish connections
@@ -518,7 +518,7 @@ class Motif_Count:
         counter_c1 = 0
 
         for table in range(len(self.rules)):
-            print(self.rules[table])
+            # print(self.rules[table])
 
             indexx = -1
             for table_row in self.values[table]:
@@ -547,7 +547,7 @@ class Motif_Count:
                 else:
                     motif_list.append(torch.sum(result))
 
-                print(torch.sum(result))
+                # print(torch.sum(result))
 
 
                 # Clean up to free memory
