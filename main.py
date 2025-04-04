@@ -67,12 +67,12 @@ parser.add_argument('--transductive', dest="transductive", default="True", type=
                     help="This flag is used if want to have transductive link prediction")
 parser.add_argument('--edge_base', dest="edge_base", default="True", type=str,
                     help="This flag is used if want to have edge base data splitting")
-parser.add_argument('-motif_obj', dest="motif_obj", default = True , help="adds motif_loss term to objective function")
+parser.add_argument('-motif_loss', dest="motif_loss", default = False , help="adds motif_loss term to objective function")
 parser.add_argument('-rp', dest="rule_prune",  default= True , help="Toggle rule pruning on or off")
 parser.add_argument('-rw', dest="rule_weight",  default= False , help="Toggle rule weighting on or off - If you want to use rule weighting, you need to turn on rule pruning first by setting it to True.")
 parser.add_argument('-dr', dest="devide_rec_adj",  default= False , help="This switch will divide reconstructed adjacency matrix by 1/n in every epoch")
 parser.add_argument('-graph_type', dest="graph_type", default="homogeneous", choices=["homogeneous", "heterogeneous"], help="Choose the graph type: homogeneous or heterogeneous")
-parser.add_argument('--graph_realism', type=bool, default=False,
+parser.add_argument('--graph_realism', type=bool, default=True,
                     help="Set to True to enable graph realism evaluation, or False to disable it.")
 
 parser.add_argument('--motif_count_eval', type=bool, default=True,
@@ -560,17 +560,6 @@ is_prior = False
 
 
 
-# # evaluation on graph realism and motif count
-
-if args.graph_realism == True:
-    inductive_model.eval()
-    dir = "GeneratedSamples/"+str(args.dataSet)
-    setting="Rule_reg" if args.motif_obj else "Vanila"
-    dir+=setting+"/"
-    SaveSamples(inductive_model, graph_dgl, feat_train, adj_train, feat_train[:,data_center.important_feats_id].float(), dir, labels_train, n_target, sampling_method, is_prior)
-    # gmm_metrics_dir = "GMM-metrics"  # Relative or absolute path
-    # script_name = "RuleEval.py"
-    # subprocess.run(["python", os.path.join(gmm_metrics_dir, script_name)], check=True)
 
 
 
@@ -626,7 +615,7 @@ if args.motif_count_eval == True:
 
 
     os.makedirs('count_distance', exist_ok=True)
-    ds_dir = os.path.join('count_distance', ds + "_" + str(args.motif_obj) )
+    ds_dir = os.path.join('count_distance', ds + "_" + str(args.motif_loss) )
     os.makedirs(ds_dir, exist_ok=True)
 
     data = {
@@ -638,3 +627,17 @@ if args.motif_count_eval == True:
     json_path = os.path.join(ds_dir, 'variables.json')
     with open(json_path, 'w') as f:
         json.dump(data, f, indent=4)  
+
+
+
+# # evaluation on graph realism and motif count
+
+if args.graph_realism == True:
+    inductive_model.eval()
+    dir = "GeneratedSamples/"+str(args.dataSet)
+    setting="Rule_reg" if args.motif_loss else "Vanila"
+    dir+=setting+"/"
+    SaveSamples(inductive_model, graph_dgl, feat_train, adj_train, feat_train[:,data_center.important_feats_id].float(), dir, labels_train, n_target, sampling_method, is_prior)
+    # gmm_metrics_dir = "GMM-metrics"  # Relative or absolute path
+    # script_name = "RuleEval.py"
+    # subprocess.run(["python", os.path.join(gmm_metrics_dir, script_name)], check=True)

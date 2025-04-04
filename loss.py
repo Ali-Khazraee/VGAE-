@@ -24,7 +24,7 @@ from utils import *
 def  optimizer_VAE (lambda_1,lambda_2, lambda_3,lambda_4, true_labels, reconstructed_labels, loss_type, pred, reconstructed_feat, labels, x, norm_feat, pos_weight_feat,  std_z, mean_z, num_nodes, pos_weight, norm, indexes, trainID, args, observed, predicted):
     
     
-    if args.motif_obj == True: 
+    if args.motif_loss == True: 
 
 
 
