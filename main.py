@@ -67,12 +67,12 @@ parser.add_argument('--transductive', dest="transductive", default="True", type=
                     help="This flag is used if want to have transductive link prediction")
 parser.add_argument('--edge_base', dest="edge_base", default="True", type=str,
                     help="This flag is used if want to have edge base data splitting")
-parser.add_argument('-motif_loss', dest="motif_loss", default = False , help="adds motif_loss term to objective function")
+parser.add_argument('-motif_loss', dest="motif_loss", default = True , help="adds motif_loss term to objective function")
 parser.add_argument('-rp', dest="rule_prune",  default= True , help="Toggle rule pruning on or off")
 parser.add_argument('-rw', dest="rule_weight",  default= False , help="Toggle rule weighting on or off - If you want to use rule weighting, you need to turn on rule pruning first by setting it to True.")
 parser.add_argument('-dr', dest="devide_rec_adj",  default= False , help="This switch will divide reconstructed adjacency matrix by 1/n in every epoch")
 parser.add_argument('-graph_type', dest="graph_type", default="homogeneous", choices=["homogeneous", "heterogeneous"], help="Choose the graph type: homogeneous or heterogeneous")
-parser.add_argument('--graph_realism', type=bool, default=True,
+parser.add_argument('--graph_realism', type=bool, default=False,
                     help="Set to True to enable graph realism evaluation, or False to disable it.")
 
 parser.add_argument('--motif_count_eval', type=bool, default=True,
@@ -90,7 +90,6 @@ print("SETING: " + str(args))
 device_id = 'cpu'
 
 device = torch.device(device_id)
-
 
 
 random.seed(args.seed)
